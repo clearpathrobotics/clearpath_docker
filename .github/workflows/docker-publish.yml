@@ -18,7 +18,7 @@ jobs:
     strategy:
       matrix:
         ros_distro: [jazzy, humble]
-        stage: [base, dev]
+        stage: [cpr-ros-base, cpr-ros-dev]
 
     steps:
       - name: Checkout repo
