@@ -37,6 +37,7 @@ RUN wget https://raw.githubusercontent.com/clearpathrobotics/public-rosdistro/ma
 ENV DEBIAN_FRONTEND=
 
 LABEL com.clearpathrobotics.vendor="Clearpath Robotics"
+LABEL org.opencontainers.image.source="https://github.com/clearpathrobotics/clearpath_docker"
 
 FROM cpr-jazzy-ros-base AS cpr-jazzy-dev
 RUN apt-get update && apt-get install -y \
