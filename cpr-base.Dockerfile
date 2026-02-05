@@ -57,11 +57,12 @@ ARG USERNAME=ros
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Create a non-root user
 RUN groupadd --gid $USER_GID $USERNAME \
   && useradd -s /bin/bash --uid $USER_UID --gid $USER_GID -m $USERNAME \
 
-  ENV DEBIAN_FRONTEND=noninteractive
   # [Optional] Add sudo support for the non-root user
   && apt-get update \
   && apt-get install -y sudo \
