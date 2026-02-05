@@ -1,4 +1,6 @@
-FROM ros:jazzy-ros-base AS cpr-jazzy-ros-base
+ARG ROS_DISTRO=jazzy
+
+FROM ros:${ROS_DISTRO}-ros-base AS cpr-ros-base
 
 # Fix issue with new ubuntu user
 RUN userdel -r ubuntu
@@ -26,9 +28,9 @@ RUN git clone https://github.com/mikekaram/rosdep-generator.git \
   && python3 rosdep-generator/rosdep-generator \
   --org clearpathrobotics \
   --repo public-rosdistro \
-  --distro jazzy \
+  --distro ${ROS_DISTRO} \
   && rm -rf rosdep-generator
-RUN echo "yaml file:///etc/ros/rosdep/clearpathrobotics-public-rosdistro-jazzy.yaml jazzy" > /etc/ros/rosdep/sources.list.d/90-clearpathrobotics-public-rosdistro-jazzy.list
+RUN echo "yaml file:///etc/ros/rosdep/clearpathrobotics-public-rosdistro-${ROS_DISTRO}.yaml ${ROS_DISTRO}" > /etc/ros/rosdep/sources.list.d/90-clearpathrobotics-public-rosdistro-${ROS_DISTRO}.list
 
 RUN wget https://packages.clearpathrobotics.com/public.key -qO - | apt-key add -
 RUN sh -c 'echo "deb https://packages.clearpathrobotics.com/stable/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/clearpath-latest.list'
@@ -39,7 +41,7 @@ ENV DEBIAN_FRONTEND=
 LABEL com.clearpathrobotics.vendor="Clearpath Robotics"
 LABEL org.opencontainers.image.source="https://github.com/clearpathrobotics/clearpath_docker"
 
-FROM cpr-jazzy-ros-base AS cpr-jazzy-dev
+FROM cpr-ros-base AS cpr-ros-dev
 RUN apt-get update && apt-get install -y \
   python3-pip \
   python3-pep8 \
@@ -63,7 +65,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Create a non-root user
 RUN groupadd --gid $USER_GID $USERNAME \
   && useradd -s /bin/bash --uid $USER_UID --gid $USER_GID -m $USERNAME \
-
   # [Optional] Add sudo support for the non-root user
   && apt-get update \
   && apt-get install -y sudo \
