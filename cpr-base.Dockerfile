@@ -14,6 +14,7 @@ RUN echo '\
 RUN apt-get update && apt-get install -y \
   wget \
   git \
+  gnupg \
   python3-yaml \
   curl \
   && apt-get upgrade -y --with-new-pkgs \
@@ -32,8 +33,10 @@ RUN git clone https://github.com/mikekaram/rosdep-generator.git \
   && rm -rf rosdep-generator
 RUN echo "yaml file:///etc/ros/rosdep/clearpathrobotics-public-rosdistro-${ROS_DISTRO}.yaml ${ROS_DISTRO}" > /etc/ros/rosdep/sources.list.d/90-clearpathrobotics-public-rosdistro-${ROS_DISTRO}.list
 
-RUN wget https://packages.clearpathrobotics.com/public.key -qO - | apt-key add -
-RUN sh -c 'echo "deb https://packages.clearpathrobotics.com/stable/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/clearpath-latest.list'
+RUN mkdir -p /etc/apt/keyrings \
+  && wget https://packages.clearpathrobotics.com/public.key -qO- \
+    | gpg --dearmor -o /etc/apt/keyrings/clearpathrobotics.gpg
+RUN sh -c 'echo "deb [signed-by=/etc/apt/keyrings/clearpathrobotics.gpg] https://packages.clearpathrobotics.com/stable/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/clearpath-latest.list'
 RUN wget https://raw.githubusercontent.com/clearpathrobotics/public-rosdistro/master/rosdep/50-clearpath.list -O /etc/ros/rosdep/sources.list.d/50-clearpath.list
 
 ENV DEBIAN_FRONTEND=
