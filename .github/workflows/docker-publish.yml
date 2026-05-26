@@ -14,7 +14,11 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ros_distro: [humble, jazzy, lyrical, rolling]
 
     steps:
       - name: Checkout repo
@@ -35,6 +39,8 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
+          flavor: |
+            prefix=${{ matrix.ros_distro }}-,onlatest=true
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
@@ -42,5 +48,7 @@ jobs:
           context: .
           file: ./cpr-base.Dockerfile
           push: true
+          build-args: |
+            ROS_DISTRO=${{ matrix.ros_distro }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
