@@ -36,7 +36,16 @@ RUN echo "yaml file:///etc/ros/rosdep/clearpathrobotics-public-rosdistro-${ROS_D
 RUN mkdir -p /etc/apt/keyrings \
   && wget https://packages.clearpathrobotics.com/public.key -qO- \
     | gpg --dearmor -o /etc/apt/keyrings/clearpathrobotics.gpg
-RUN sh -c 'echo "deb [signed-by=/etc/apt/keyrings/clearpathrobotics.gpg] https://packages.clearpathrobotics.com/stable/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/clearpath-latest.list'
+# Only add the Clearpath apt source if the stable repo exists for this Ubuntu codename.
+# Newer Ubuntu releases (e.g. resolute) may not yet be published in the stable repo,
+# which would otherwise cause `apt-get update` to fail with a 404.
+RUN UBUNTU_CODENAME="$(lsb_release -cs)" \
+  && if wget -q --spider "https://packages.clearpathrobotics.com/stable/ubuntu/dists/${UBUNTU_CODENAME}/Release"; then \
+       echo "deb [signed-by=/etc/apt/keyrings/clearpathrobotics.gpg] https://packages.clearpathrobotics.com/stable/ubuntu ${UBUNTU_CODENAME} main" \
+         > /etc/apt/sources.list.d/clearpath-latest.list; \
+     else \
+       echo "Clearpath stable repo not available for Ubuntu ${UBUNTU_CODENAME}; skipping apt source."; \
+     fi
 RUN wget https://raw.githubusercontent.com/clearpathrobotics/public-rosdistro/master/rosdep/50-clearpath.list -O /etc/ros/rosdep/sources.list.d/50-clearpath.list
 
 ENV DEBIAN_FRONTEND=
