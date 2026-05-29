@@ -75,6 +75,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract base image metadata (to derive CPR_BASE_TAG)
+        id: base_meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          flavor: |
+            prefix=${{ matrix.ros_distro }}-,onlatest=true
+
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v6
@@ -93,6 +101,6 @@ jobs:
           build-args: |
             ROS_DISTRO=${{ matrix.ros_distro }}
             CPR_BASE_IMAGE=ghcr.io/${{ github.repository }}
-            CPR_BASE_TAG=${{ matrix.ros_distro }}-latest
+            CPR_BASE_TAG=${{ matrix.ros_distro }}-${{ steps.base_meta.outputs.version }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
