@@ -52,6 +52,7 @@ RUN UBUNTU_CODENAME="$(lsb_release -cs)" \
        python3-colcon-coveragepy-result \
        python3-colcon-lcov-result \
        python3-colcon-meson \
+       python3-colcon-metadata \
        python3-colcon-mixin \
   && if [ -n "${RTI_CONNEXT_DDS}" ]; then \
        RTI_NC_LICENSE_ACCEPTED=yes apt-get install -y "${RTI_CONNEXT_DDS}" || \
@@ -63,11 +64,13 @@ RUN UBUNTU_CODENAME="$(lsb_release -cs)" \
 
 # Register the default colcon mixin/metadata repositories so `colcon mixin` /
 # `colcon metadata` work out of the box in CI.
-RUN colcon mixin add default \
-      https://raw.githubusercontent.com/colcon/colcon-mixin-repository/master/index.yaml \
+RUN (colcon mixin add default \
+        https://raw.githubusercontent.com/colcon/colcon-mixin-repository/master/index.yaml \
+      || true) \
   && colcon mixin update default \
-  && colcon metadata add default \
-      https://raw.githubusercontent.com/colcon/colcon-metadata-repository/master/index.yaml \
+  && (colcon metadata add default \
+        https://raw.githubusercontent.com/colcon/colcon-metadata-repository/master/index.yaml \
+      || true) \
   && colcon metadata update default
 
 ENV DEBIAN_FRONTEND=
