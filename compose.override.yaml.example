@@ -23,11 +23,5 @@ services:
     #   - dialout
     #   - plugdev
 
-    # GUI apps (X11):
-    # environment:
-    #   - DISPLAY=${DISPLAY}
-    # volumes:
-    #   - /tmp/.X11-unix:/tmp/.X11-unix
-
     # Last-resort full hardware access (lab use only):
     # privileged: true
