@@ -1,0 +1,33 @@
+# Copy to compose.override.yaml and edit for your host.
+# compose.override.yaml is git-ignored.
+#
+# Compose auto-merges this on top of compose.yaml — list only the keys you
+# want to add or change.
+
+services:
+  dev:
+    # Pass through specific USB / serial devices:
+    # devices:
+    #   - /dev/ttyUSB0
+    #   - /dev/ttyACM0
+
+    # Or expose all USB devices with dynamic hotplug support:
+    # volumes:
+    #   - /dev/bus/usb:/dev/bus/usb
+    # device_cgroup_rules:
+    #   - 'c 189:* rmw'
+
+    # Match host groups so the `ros` user can access devices owned by
+    # root:dialout / root:plugdev without running as root:
+    # group_add:
+    #   - dialout
+    #   - plugdev
+
+    # GUI apps (X11):
+    # environment:
+    #   - DISPLAY=${DISPLAY}
+    # volumes:
+    #   - /tmp/.X11-unix:/tmp/.X11-unix
+
+    # Last-resort full hardware access (lab use only):
+    # privileged: true
