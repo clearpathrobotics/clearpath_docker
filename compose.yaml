@@ -1,0 +1,47 @@
+# Compose file for the Clearpath dev image.
+#
+# Usage:
+#   docker compose up -d dev
+#   docker compose exec dev bash
+#
+# Override knobs (set in a .env file or on the command line):
+#   ROS_DISTRO  - humble | jazzy | lyrical | rolling (default: jazzy)
+#   ROS2_WS     - path to your ROS 2 workspace on the host (default: ~/ros2_ws)
+#
+# For host-specific tweaks (USB devices, extra mounts, etc.), create a
+# compose.override.yaml — see compose.override.yaml.example.
+
+services:
+  dev:
+    image: ghcr.io/clearpathrobotics/clearpath_docker:${ROS_DISTRO:-jazzy}-dev-latest
+    container_name: cpr-dev-${ROS_DISTRO:-jazzy}
+    user: ros
+    network_mode: host
+    working_dir: /home/ros/ros2_ws
+    volumes:
+      - ${ROS2_WS:-~/ros2_ws}:/home/ros/ros2_ws
+      - ${HOME}/.clearpath_docker_history:/commandhistory
+    stdin_open: true
+    tty: true
+    command: bash
+
+  # Opt-in: rebuild the dev image locally with the host user's uid/gid so
+  # files created in the mounted workspace are owned by you (instead of
+  # uid 1000). Use this if your host user is not uid/gid 1000.
+  #
+  #   docker compose up -d --build dev-local
+  #   docker compose exec dev-local bash
+  dev-local:
+    extends:
+      service: dev
+    image: cpr-dev:${ROS_DISTRO:-jazzy}-local
+    container_name: cpr-dev-${ROS_DISTRO:-jazzy}-local
+    build:
+      context: .
+      dockerfile: cpr-dev.Dockerfile
+      args:
+        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+        CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
+        CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-latest
+        USER_UID: ${USER_UID:-1000}
+        USER_GID: ${USER_GID:-1000}
