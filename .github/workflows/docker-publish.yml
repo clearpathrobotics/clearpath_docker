@@ -41,6 +41,14 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           flavor: |
             prefix=${{ matrix.ros_distro }}-,onlatest=true
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-pr-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=schedule,pattern=nightly
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
@@ -82,6 +90,14 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           flavor: |
             prefix=${{ matrix.ros_distro }}-,onlatest=true
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-pr-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=schedule,pattern=nightly
 
       - name: Extract metadata (tags, labels)
         id: meta
@@ -90,6 +106,14 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           flavor: |
             prefix=${{ matrix.ros_distro }}-ci-,onlatest=true
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-ci-pr-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=schedule,pattern=nightly
 
       - name: Build and push CI image (amd64 only)
         uses: docker/build-push-action@v7
@@ -101,6 +125,6 @@ jobs:
           build-args: |
             ROS_DISTRO=${{ matrix.ros_distro }}
             CPR_BASE_IMAGE=ghcr.io/${{ github.repository }}
-            CPR_BASE_TAG=${{ matrix.ros_distro }}-${{ steps.base_meta.outputs.version }}
+            CPR_BASE_TAG=${{ steps.base_meta.outputs.version }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
