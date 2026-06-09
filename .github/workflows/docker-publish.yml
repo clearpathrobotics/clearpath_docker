@@ -129,7 +129,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  common:
+  ci-common:
     needs: ci
     runs-on: ubuntu-latest
     strategy:
