@@ -33,7 +33,7 @@ Built on the base image. Adds the toolchain needed to build and test ROS 2
 packages: `ros-dev-tools`, `colcon` mixins/metadata, `flake8` plugins,
 `pytest` helpers, lcov, and the RTI Connext DDS package matching the distro.
 
-### Common — [cpr-ci-common.Dockerfile](cpr-ci-common.Dockerfile)
+### CI Common — [cpr-ci-common.Dockerfile](cpr-ci-common.Dockerfile)
 
 Built on the CI image. Pre-installs the released
 `ros-<distro>-clearpath-common` package so all of its build, test, and
