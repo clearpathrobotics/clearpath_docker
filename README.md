@@ -6,8 +6,9 @@ GitHub Container Registry (GHCR) at
 
 ## Images
 
-Three image variants are built for each supported ROS 2 distro. The dev and
-CI images are both built `FROM` the base image.
+Four image variants are built for each supported ROS 2 distro. The dev and
+CI images are both built `FROM` the base image; the common image is built
+`FROM` the CI image.
 
 ### Base — [cpr-base.Dockerfile](cpr-base.Dockerfile)
 
@@ -32,6 +33,16 @@ Built on the base image. Adds the toolchain needed to build and test ROS 2
 packages: `ros-dev-tools`, `colcon` mixins/metadata, `flake8` plugins,
 `pytest` helpers, lcov, and the RTI Connext DDS package matching the distro.
 
+### Common — [cpr-ci-common.Dockerfile](cpr-ci-common.Dockerfile)
+
+Built on the CI image. Pre-installs the released
+`ros-<distro>-clearpath-common` package so all of its build, test, and
+runtime dependencies are baked into the image. This is a CI accelerator:
+workflows that check out and build `clearpath_common` from source on top of
+this image find every dependency already present, so the in-CI `rosdep
+install` is a near no-op and the build only needs to compile. The
+from-source overlay workspace shadows the pre-installed binary at runtime.
+
 ### Supported ROS 2 distros
 
 `humble`, `jazzy`, `lyrical`, `rolling`.
@@ -45,6 +56,7 @@ Tags are produced by the GitHub Actions workflow and follow this scheme:
 | Base | `<distro>-latest`, `<distro>-<branch>`, `<distro>-pr-<n>`, `<distro>-<semver>`, `<distro>-nightly` |
 | Dev  | `<distro>-dev-latest`, `<distro>-dev-<branch>`, `<distro>-dev-pr-<n>`, `<distro>-dev-<semver>`, `<distro>-dev-nightly` |
 | CI   | `<distro>-ci-latest`, `<distro>-ci-<branch>`, `<distro>-ci-pr-<n>`, `<distro>-ci-<semver>`, `<distro>-ci-nightly` |
+| CI Common | `<distro>-ci-common-latest`, `<distro>-ci-common-<branch>`, `<distro>-ci-common-pr-<n>`, `<distro>-ci-common-<semver>`, `<distro>-ci-common-nightly` |
 
 For example:
 
@@ -52,6 +64,7 @@ For example:
 docker pull ghcr.io/clearpathrobotics/clearpath_docker:jazzy-latest
 docker pull ghcr.io/clearpathrobotics/clearpath_docker:jazzy-dev-latest
 docker pull ghcr.io/clearpathrobotics/clearpath_docker:jazzy-ci-latest
+docker pull ghcr.io/clearpathrobotics/clearpath_docker:jazzy-ci-common-latest
 ```
 
 ## Building locally
@@ -85,6 +98,17 @@ docker build \
   --build-arg CPR_BASE_TAG=jazzy \
   -f cpr-ci.Dockerfile \
   -t cpr-ci:jazzy .
+```
+
+Common image (consumes a CI image via `CPR_BASE_IMAGE` / `CPR_BASE_TAG`):
+
+```sh
+docker build \
+  --build-arg ROS_DISTRO=jazzy \
+  --build-arg CPR_BASE_IMAGE=cpr-ci \
+  --build-arg CPR_BASE_TAG=jazzy \
+  -f cpr-ci-common.Dockerfile \
+  -t cpr-ci-common:jazzy .
 ```
 
 ## Using the dev image with a `ros2_ws`
@@ -188,10 +212,10 @@ on the host. For tighter isolation, drop `--network host` and add specific
 ## Publishing
 
 [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml)
-builds and pushes all three image variants to GHCR on pushes to `main`, on
+builds and pushes all four image variants to GHCR on pushes to `main`, on
 version tags (`v*`), on pull requests, and nightly at 00:00 UTC. The dev and
 CI builds wait for the base build and reuse the tag produced for the same
-ref.
+ref; the common build waits for the CI build and reuses its tag.
 
 ## License
 
