@@ -1,0 +1,46 @@
+# Compose file for running sim and viz containers together.
+# These containers communicate via ROS2 using host network.
+#
+# Usage:
+#   xhost +local:
+#   SETUP_PATH_HOST=$HOME/clearpath docker compose -f compose-sim-viz.yaml up
+#
+# Drive the sim from viz: use the RViz interface to send goals and commands
+# to the sim running in the parallel container.
+
+services:
+  sim:
+    image: ghcr.io/clearpathrobotics/clearpath_docker:${ROS_DISTRO:-jazzy}-sim-latest
+    container_name: cpr-sim-${ROS_DISTRO:-jazzy}
+    user: ros
+    network_mode: host
+    ipc: host
+    environment:
+      SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
+      DISPLAY: ${DISPLAY:-:0}
+    volumes:
+      - ${SETUP_PATH_HOST:-${HOME}/setup/path/}:/home/ros/setup/path/
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
+    stdin_open: true
+    tty: true
+
+  viz:
+    image: ghcr.io/clearpathrobotics/clearpath_docker:${ROS_DISTRO:-jazzy}-viz-latest
+    container_name: cpr-viz-${ROS_DISTRO:-jazzy}
+    user: ros
+    network_mode: host
+    devices:
+      - /dev/dri:/dev/dri
+    ipc: host
+    environment:
+      SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
+      DISPLAY: ${DISPLAY:-:0}
+    volumes:
+      - ${SETUP_PATH_HOST:-${HOME}/setup/path/}:/home/ros/setup/path/:ro
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
+    stdin_open: true
+    tty: true
+    depends_on:
+      - sim
