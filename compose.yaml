@@ -1,12 +1,19 @@
-# Compose file for the Clearpath dev image.
+# Compose file for the Clearpath dev, sim, and viz images.
 #
 # Usage:
 #   docker compose up -d dev
 #   docker compose exec dev bash
+#   docker compose up sim                 # Launch simulation only
+#   docker compose up viz                 # Launch visualization only
+#   docker compose -f compose-sim-viz.yaml up  # Launch sim + viz together
 #
 # Override knobs (set in a .env file or on the command line):
 #   ROS_DISTRO  - humble | jazzy | lyrical | rolling (default: jazzy)
 #   ROS2_WS     - path to your ROS 2 workspace on the host (default: ~/ros2_ws)
+#   SETUP_PATH  - setup path passed to clearpath_gz simulation launch
+#                 (default in container: /home/ros/setup/path/)
+#   SETUP_PATH_HOST - host directory to mount into /home/ros/setup/path/
+#                     (default: $HOME/setup/path/)
 #
 # For host-specific tweaks (USB devices, extra mounts, etc.), create a
 # compose.override.yaml — see compose.override.yaml.example.
@@ -45,3 +52,37 @@ services:
         CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-latest
         USER_UID: ${USER_UID:-1000}
         USER_GID: ${USER_GID:-1000}
+
+  sim:
+    image: ghcr.io/clearpathrobotics/clearpath_docker:${ROS_DISTRO:-jazzy}-sim-latest
+    container_name: cpr-sim-${ROS_DISTRO:-jazzy}
+    user: ros
+    network_mode: host
+    ipc: host
+    environment:
+      SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
+      DISPLAY: ${DISPLAY:-:0}
+    volumes:
+      - ${SETUP_PATH_HOST:-${HOME}/setup/path/}:/home/ros/setup/path/
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
+    stdin_open: true
+    tty: true
+
+  viz:
+    image: ghcr.io/clearpathrobotics/clearpath_docker:${ROS_DISTRO:-jazzy}-viz-latest
+    container_name: cpr-viz-${ROS_DISTRO:-jazzy}
+    user: ros
+    network_mode: host
+    devices:
+      - /dev/dri:/dev/dri
+    ipc: host
+    environment:
+      SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
+      DISPLAY: ${DISPLAY:-:0}
+    volumes:
+      - ${SETUP_PATH_HOST:-${HOME}/setup/path/}:/home/ros/setup/path/:ro
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
+    stdin_open: true
+    tty: true
