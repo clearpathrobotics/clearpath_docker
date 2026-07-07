@@ -4,8 +4,11 @@
 #   docker compose up -d dev
 #   docker compose exec dev bash
 #   docker compose up sim                 # Launch simulation only
+#   docker compose up nav2                # Launch Nav2 demos only
 #   docker compose up viz                 # Launch visualization only
+#   docker compose up sim nav2 viz        # Launch simulation + Nav2 + visualization
 #   docker compose -f compose-sim-viz.yaml up  # Launch sim + viz together
+#   docker compose -f compose-sim-viz-nav2.yaml up  # Launch sim + nav2 + viz together
 #
 # Override knobs (set in a .env file or on the command line):
 #   ROS_DISTRO  - humble | jazzy | lyrical | rolling (default: jazzy)
@@ -13,7 +16,9 @@
 #   SETUP_PATH  - setup path passed to clearpath_gz simulation launch
 #                 (default in container: /home/ros/setup/path/)
 #   SETUP_PATH_HOST - host directory to mount into /home/ros/setup/path/
-#                     (default: $HOME/setup/path/)
+#                     (default: $HOME/clearpath/)
+#   USE_SIM_TIME - true/false for Nav2 demos in simulation (default: true)
+#   SCAN_TOPIC   - optional lidar topic override for 3D lidar setups
 #
 # For host-specific tweaks (USB devices, extra mounts, etc.), create a
 # compose.override.yaml — see compose.override.yaml.example.
@@ -63,9 +68,30 @@ services:
       SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/setup/path/}:/home/ros/setup/path/
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
+    stdin_open: true
+    tty: true
+
+  nav2:
+    image: cpr-nav2:${ROS_DISTRO:-jazzy}-local
+    container_name: cpr-nav2-${ROS_DISTRO:-jazzy}
+    build:
+      context: .
+      dockerfile: cpr-nav2.Dockerfile
+      args:
+        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+        CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
+        CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-dev-latest
+    user: ros
+    network_mode: host
+    environment:
+      SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
+      USE_SIM_TIME: ${USE_SIM_TIME:-true}
+      SCAN_TOPIC: ${SCAN_TOPIC:-}
+    volumes:
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/:ro
     stdin_open: true
     tty: true
 
@@ -81,7 +107,7 @@ services:
       SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/setup/path/}:/home/ros/setup/path/:ro
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
     stdin_open: true

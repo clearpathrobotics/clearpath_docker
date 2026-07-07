@@ -66,6 +66,58 @@ The launcher defaults `setup_path` to `$HOME/setup/path/`, and you can
 override it by passing `SETUP_PATH=/some/other/path/` into the container.
 This variant is only built for `humble` and `jazzy`.
 
+### Nav2 Demos — [cpr-nav2.Dockerfile](cpr-nav2.Dockerfile)
+
+Built on the dev image. Installs `ros-<distro>-clearpath-nav2-demos` and
+`ros-<distro>-rmw-cyclonedds-cpp`. Uses CycloneDDS as the default RMW.
+
+Reads the robot namespace from `robot.yaml` in the setup path (same file used
+by the sim and viz containers) and launches Nav2 with platform-specific
+configuration from `clearpath_nav2_demos`:
+
+```sh
+ros2 launch clearpath_nav2_demos nav2.launch.py \
+  use_sim_time:=true \
+  setup_path:=/home/ros/setup/path/
+```
+
+The setup path must contain a `robot.yaml` that declares the platform serial
+number — e.g. `j100-0000`, `a200-0000`. The namespace (`j100_0000`,
+`a200_0000`) is derived automatically from `platform.id` in that file.
+
+**Environment variables:**
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SETUP_PATH` | `/home/ros/setup/path/` | Path inside container to robot.yaml |
+| `USE_SIM_TIME` | `true` | Use `/clock` from Gazebo sim |
+| `RMW_IMPLEMENTATION` | `rmw_cyclonedds_cpp` | ROS 2 middleware |
+| `SCAN_TOPIC` | _(unset)_ | Override the lidar scan topic (useful for 3D lidar) |
+| `NAV2_LAUNCH_FILE` | `nav2.launch.py` | Launch file; use `slam.launch.py` to start in SLAM-only mode |
+| `NAV2_ENABLE_SLAM` | `false` | When `true`, runs `slam.launch.py` alongside `nav2.launch.py` |
+| `AUTO_NAV2_STARTUP` | `false` | When `true`, automatically calls the lifecycle manager startup service and retries until all navigation nodes are active |
+| `NAV2_STARTUP_TIMEOUT_S` | `120` | Seconds to wait for the lifecycle manager service to appear |
+| `NAV2_SERVICE_CALL_TIMEOUT_S` | `8` | Per-call timeout for lifecycle service calls |
+| `NAV2_ACTIVE_WAIT_TIMEOUT_S` | `60` | Seconds to wait for all navigation nodes to reach active state |
+
+The `AUTO_NAV2_STARTUP` bootstrap calls the lifecycle manager startup service,
+then issues a pause/resume cycle to converge any nodes that lost the startup
+race, then individually nudges any remaining inactive nodes — removing the need
+to manually call the service from outside the container.
+
+**Usage — standalone against a running sim:**
+
+```sh
+docker compose -f compose-sim-viz-nav2.yaml up
+```
+
+`SETUP_PATH_HOST` defaults to `$HOME/clearpath/`. Override if your
+`robot.yaml` lives elsewhere:
+
+```sh
+SETUP_PATH_HOST=$HOME/my_robot docker compose -f compose-sim-viz-nav2.yaml up
+```
+
 ### Viz — [cpr-viz.Dockerfile](cpr-viz.Dockerfile)
 
 Built on the dev image. Installs `ros-<distro>-clearpath-viz`, reads the
@@ -83,22 +135,65 @@ visualize robot state from the simulation.
 
 ```sh
 xhost +local:
-SETUP_PATH_HOST=$HOME/clearpath ROS_DISTRO=jazzy docker compose up viz
+ROS_DISTRO=jazzy docker compose up viz
 ```
 
 **Usage — Sim + Viz together:**
 
 ```sh
 xhost +local:
-SETUP_PATH_HOST=$HOME/clearpath ROS_DISTRO=jazzy \
-  docker compose -f compose-sim-viz.yaml up
+ROS_DISTRO=jazzy docker compose -f compose-sim-viz.yaml up
 ```
+
+**Usage — Sim + Nav2 + Viz together:**
+
+```sh
+xhost +local:
+ROS_DISTRO=jazzy docker compose -f compose-sim-viz-nav2.yaml up
+```
+
+**Usage — Sim + Nav2 + Viz with NVIDIA GPU (Optimus/discrete GPU):**
+
+```sh
+xhost +local:
+ROS_DISTRO=jazzy docker compose -f compose-sim-viz-nav2.yaml -f compose.nvidia.yaml up
+```
+
+See [compose.nvidia.yaml](compose.nvidia.yaml) for prerequisites and details.
+
+The dedicated `compose-sim-viz-nav2.yaml` stack defaults `NAV2_LAUNCH_FILE` to
+`nav2.launch.py` and sets `NAV2_ENABLE_SLAM=true`, so both Nav2 and SLAM start
+automatically without manual steps. It also enables
+`AUTO_NAV2_STARTUP=true`, which auto-runs a lifecycle pause/resume bootstrap
+to converge Nav2 nodes into an active state.
 
 In the RViz window, use the RobotModel and TF displays to inspect the simulated
 robot. Both containers share the host network and ROS domain, so ROS2 topics
 and services flow between them automatically.
 
 This variant is only built for `humble` and `jazzy`.
+
+### NVIDIA GPU overlay — [compose.nvidia.yaml](compose.nvidia.yaml)
+
+An optional compose overlay that enables NVIDIA GPU rendering for the `sim`
+(Gazebo) and `viz` (RViz2) services. Uses the `nvidia` container runtime with
+PRIME render offload for Optimus (Intel + discrete NVIDIA) laptops.
+
+**Prerequisites:**
+
+Install the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html):
+
+```sh
+sudo apt install nvidia-container-toolkit
+sudo systemctl restart docker
+```
+
+**Usage** (layer on top of any sim-containing compose file):
+
+```sh
+docker compose -f compose-sim-viz-nav2.yaml -f compose.nvidia.yaml up
+docker compose -f compose-sim-viz.yaml       -f compose.nvidia.yaml up
+```
 
 ### Supported ROS 2 distros
 
@@ -116,6 +211,7 @@ Tags are produced by the GitHub Actions workflow and follow this scheme:
 | CI Common | `<distro>-ci-common-latest`, `<distro>-ci-common-<branch>`, `<distro>-ci-common-pr-<n>`, `<distro>-ci-common-<semver>`, `<distro>-ci-common-nightly` where `<distro>` is `humble` or `jazzy` |
 | CI Robot | `<distro>-ci-robot-latest`, `<distro>-ci-robot-<branch>`, `<distro>-ci-robot-pr-<n>`, `<distro>-ci-robot-<semver>`, `<distro>-ci-robot-nightly` where `<distro>` is `humble` or `jazzy` |
 | Sim | `<distro>-sim-latest`, `<distro>-sim-<branch>`, `<distro>-sim-pr-<n>`, `<distro>-sim-<semver>`, `<distro>-sim-nightly` where `<distro>` is `humble` or `jazzy` |
+| Nav2 Demos | local-compose image from `cpr-nav2.Dockerfile` |
 | Viz | `<distro>-viz-latest`, `<distro>-viz-<branch>`, `<distro>-viz-pr-<n>`, `<distro>-viz-<semver>`, `<distro>-viz-nightly` where `<distro>` is `humble` or `jazzy` |
 
 For example:
@@ -198,6 +294,17 @@ docker build \
   -t cpr-sim:jazzy .
 ```
 
+Nav2 demos image (consumes a dev image via `CPR_BASE_IMAGE` / `CPR_BASE_TAG`):
+
+```sh
+docker build \
+  --build-arg ROS_DISTRO=jazzy \
+  --build-arg CPR_BASE_IMAGE=cpr-dev \
+  --build-arg CPR_BASE_TAG=jazzy \
+  -f cpr-nav2.Dockerfile \
+  -t cpr-nav2:jazzy .
+```
+
 Run the sim image with the default setup path:
 
 ```sh
@@ -255,6 +362,27 @@ For a less typing-heavy workflow, [compose.yaml](compose.yaml) defines a
 ROS_DISTRO=jazzy docker compose up -d dev
 docker compose exec dev bash
 docker compose down
+```
+
+The same file also defines a `nav2` service that launches Nav2 demos:
+
+```sh
+SETUP_PATH_HOST=$HOME/clearpath ROS_DISTRO=jazzy docker compose up nav2
+```
+
+Run simulation, Nav2 demos, and visualization together:
+
+```sh
+xhost +local:
+SETUP_PATH_HOST=$HOME/clearpath ROS_DISTRO=jazzy docker compose up sim nav2 viz
+```
+
+Or use the dedicated compose file:
+
+```sh
+xhost +local:
+SETUP_PATH_HOST=$HOME/clearpath ROS_DISTRO=jazzy \
+  docker compose -f compose-sim-viz-nav2.yaml up
 ```
 
 The same file also defines a `sim` service that launches:

@@ -19,7 +19,7 @@ services:
       SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/setup/path/}:/home/ros/setup/path/
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
     stdin_open: true
@@ -37,7 +37,7 @@ services:
       SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/setup/path/}:/home/ros/setup/path/:ro
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
     stdin_open: true
