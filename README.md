@@ -69,7 +69,8 @@ This variant is only built for `humble` and `jazzy`.
 ### Nav2 Demos — [cpr-nav2.Dockerfile](cpr-nav2.Dockerfile)
 
 Built on the dev image. Installs `ros-<distro>-clearpath-nav2-demos` and
-`ros-<distro>-rmw-cyclonedds-cpp`. Uses CycloneDDS as the default RMW.
+`ros-<distro>-clearpath-common` (which provides CycloneDDS, Fast DDS, and
+Zenoh RMW implementations).
 
 Reads the robot namespace from `robot.yaml` in the setup path (same file used
 by the sim and viz containers) and launches Nav2 with platform-specific
@@ -173,6 +174,37 @@ and services flow between them automatically.
 
 This variant is only built for `humble` and `jazzy`.
 
+### Foxglove Bridge — [cpr-foxglove-bridge.Dockerfile](cpr-foxglove-bridge.Dockerfile)
+
+Built on the base image. Headless container that runs a
+[foxglove_bridge](https://docs.foxglove.dev/docs/connecting-to-data/ros-foxglove-bridge)
+node, allowing [Lichtblick](https://github.com/Lichtblick-Suite/lichtblick)
+(or Foxglove) to visualize ROS 2 topics without X11 or GPU access.
+
+No display server is required — Lichtblick runs on your local machine and
+connects to the container over WebSocket.
+
+> **Note:** This container is intended for use with simulation or off-robot
+> development. On a physical robot, foxglove_bridge is launched automatically
+> when enabled via
+> [`platform.enable_foxglove_bridge`](https://docs.clearpathrobotics.com/docs/ros/config/yaml/platform/foxglove_bridge)
+> in `robot.yaml`.
+
+**Usage — with simulation:**
+
+```sh
+docker compose up sim foxglove-bridge
+```
+
+Then open Lichtblick → **Open connection** → **Foxglove WebSocket** →
+`ws://localhost:8765`.
+
+**Environment variables:**
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `FOXGLOVE_BRIDGE_PORT` | `8765` | WebSocket port for foxglove_bridge |
+
 ### NVIDIA GPU overlay — [compose.nvidia.yaml](compose.nvidia.yaml)
 
 An optional compose overlay that enables NVIDIA GPU rendering for the `sim`
@@ -213,6 +245,7 @@ Tags are produced by the GitHub Actions workflow and follow this scheme:
 | Sim | `<distro>-sim-latest`, `<distro>-sim-<branch>`, `<distro>-sim-pr-<n>`, `<distro>-sim-<semver>`, `<distro>-sim-nightly` where `<distro>` is `humble` or `jazzy` |
 | Nav2 Demos | local-compose image from `cpr-nav2.Dockerfile` |
 | Viz | `<distro>-viz-latest`, `<distro>-viz-<branch>`, `<distro>-viz-pr-<n>`, `<distro>-viz-<semver>`, `<distro>-viz-nightly` where `<distro>` is `humble` or `jazzy` |
+| Foxglove Bridge | `<distro>-foxglove-bridge-latest`, `<distro>-foxglove-bridge-<branch>`, `<distro>-foxglove-bridge-pr-<n>`, `<distro>-foxglove-bridge-<semver>`, `<distro>-foxglove-bridge-nightly` where `<distro>` is `humble` or `jazzy` |
 
 For example:
 
@@ -303,6 +336,17 @@ docker build \
   --build-arg CPR_BASE_TAG=jazzy \
   -f cpr-nav2.Dockerfile \
   -t cpr-nav2:jazzy .
+```
+
+Foxglove Bridge image (consumes a base image via `CPR_BASE_IMAGE` / `CPR_BASE_TAG`):
+
+```sh
+docker build \
+  --build-arg ROS_DISTRO=jazzy \
+  --build-arg CPR_BASE_IMAGE=cpr-base \
+  --build-arg CPR_BASE_TAG=jazzy \
+  -f cpr-foxglove-bridge.Dockerfile \
+  -t cpr-foxglove-bridge:jazzy .
 ```
 
 Run the sim image with the default setup path:
