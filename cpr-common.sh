@@ -78,6 +78,56 @@ wait_for_service() {
   return 1
 }
 
+# ---------------------------------------------------------------------------
+# wait_for_sim_if_enabled
+#
+# Blocks until the Gazebo simulation is ready (i.e. /clock and a
+# */platform/odom/filtered topic are visible) or the timeout elapses.
+#
+# Environment variables (all optional):
+#   WAIT_FOR_SIM         true | false   (default: true)
+#   WAIT_FOR_TIMEOUT_SEC <seconds>      (default: 120)
+# ---------------------------------------------------------------------------
+wait_for_sim_if_enabled() {
+  local wait_for_sim="${WAIT_FOR_SIM:-true}"
+  if [[ "${wait_for_sim}" != "true" ]]; then
+    return 0
+  fi
+
+  local timeout_sec="${WAIT_FOR_TIMEOUT_SEC:-120}"
+  local sleep_sec=1
+  local waited=0
+
+  echo "[cpr-common] WAIT_FOR_SIM=true, waiting for simulation topics..."
+  echo "[cpr-common] expecting: /clock and */platform/odom/filtered"
+
+  while (( waited < timeout_sec )); do
+    local topics
+    topics="$(ros2 topic list 2>/dev/null || true)"
+
+    if echo "${topics}" | grep -Fxq "/clock" && \
+       echo "${topics}" | grep -Eq '/platform/odom/filtered$'; then
+      echo "[cpr-common] Simulation topics detected. Proceeding."
+      return 0
+    fi
+
+    sleep "${sleep_sec}"
+    waited=$(( waited + sleep_sec ))
+  done
+
+  echo "[cpr-common] Timeout after ${timeout_sec}s waiting for simulation topics; proceeding anyway." >&2
+  return 0
+}
+
+# activate_node_direct <fully_qualified_node_name>
+#
+# Attempts to transition a lifecycle node to the active state directly.
+# Returns 0 on success, 1 on failure.
+activate_node_direct() {
+  local node="$1"
+  ros2 lifecycle set "${node}" activate >/dev/null 2>&1
+}
+
 # wait_for_topic <topic_name> [timeout_s]
 #
 # Blocks until the named ROS 2 topic appears or <timeout_s> seconds elapse.

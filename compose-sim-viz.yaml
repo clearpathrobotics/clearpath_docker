@@ -22,6 +22,19 @@ services:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
+    healthcheck:
+      test:
+        - "CMD"
+        - "bash"
+        - "-c"
+        - >-
+          source /opt/ros/${ROS_DISTRO:-jazzy}/setup.bash &&
+          timeout 8 ros2 topic echo /clock --once >/dev/null 2>&1 &&
+          ros2 topic list --no-daemon 2>/dev/null | grep -qE '/[^/]+/platform/odom/filtered$'
+      interval: 10s
+      timeout: 10s
+      retries: 24
+      start_period: 120s
     stdin_open: true
     tty: true
 
@@ -40,7 +53,18 @@ services:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
+    healthcheck:
+      test:
+        - "CMD"
+        - "bash"
+        - "-c"
+        - "pgrep -f rviz2 >/dev/null"
+      interval: 10s
+      timeout: 10s
+      retries: 24
+      start_period: 60s
     stdin_open: true
     tty: true
     depends_on:
-      - sim
+      sim:
+        condition: service_healthy

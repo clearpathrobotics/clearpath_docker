@@ -67,10 +67,27 @@ services:
     environment:
       SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
+      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
+    healthcheck:
+      test:
+        - "CMD"
+        - "bash"
+        - "-c"
+        - >-
+          source /opt/ros/${ROS_DISTRO:-jazzy}/setup.bash &&
+          timeout 8 ros2 topic echo /clock --once >/dev/null 2>&1 &&
+          ros2 topic list --no-daemon 2>/dev/null | grep -qE '/[^/]+/platform/odom/filtered$'
+      interval: 10s
+      timeout: 10s
+      retries: 24
+      start_period: 120s
     stdin_open: true
     tty: true
 
@@ -90,8 +107,28 @@ services:
       SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
       USE_SIM_TIME: ${USE_SIM_TIME:-true}
       SCAN_TOPIC: ${SCAN_TOPIC:-}
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
+      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/:ro
+    healthcheck:
+      test:
+        - "CMD"
+        - "bash"
+        - "-c"
+        - >-
+          source /opt/ros/${ROS_DISTRO:-jazzy}/setup.bash &&
+          ros2 node list --no-daemon 2>/dev/null | grep -qE '/[^/]+/bt_navigator$' &&
+          ros2 action list --no-daemon 2>/dev/null | grep -qE '/[^/]+/navigate_to_pose$'
+      interval: 10s
+      timeout: 10s
+      retries: 24
+      start_period: 150s
+    depends_on:
+      sim:
+        condition: service_healthy
     stdin_open: true
     tty: true
 
@@ -106,9 +143,26 @@ services:
     environment:
       SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
+      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
+    healthcheck:
+      test:
+        - "CMD"
+        - "bash"
+        - "-c"
+        - "pgrep -f rviz2 >/dev/null"
+      interval: 10s
+      timeout: 10s
+      retries: 24
+      start_period: 60s
+    depends_on:
+      sim:
+        condition: service_healthy
     stdin_open: true
     tty: true
