@@ -1,0 +1,85 @@
+{
+  "configById": {
+    "3D!1": {
+      "cameraState": {
+        "perspective": false,
+        "distance": 30,
+        "phi": 0,
+        "thetaOffset": 0,
+        "targetOffset": [0, 0, 0],
+        "target": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "fovy": 45
+      },
+      "followMode": "follow-pose",
+      "followTf": "base_link",
+      "scene": {
+        "backgroundColor": "#303030",
+        "enableStats": false
+      },
+      "transforms": {
+        "showLabel": false,
+        "enablePreloading": false
+      },
+      "topics": {
+        "/__NS__/robot_description": {
+          "visible": true
+        },
+        "/__NS__/sensors/lidar2d_0/scan": {
+          "visible": true,
+          "colorField": "intensity",
+          "colorMode": "flat",
+          "flatColor": "#ff0000",
+          "pointSize": 3
+        },
+        "/__NS__/map": {
+          "visible": true
+        },
+        "/__NS__/global_costmap/costmap": {
+          "visible": true,
+          "alpha": 0.3
+        },
+        "/__NS__/local_costmap/costmap": {
+          "visible": true,
+          "alpha": 0.3
+        },
+        "/__NS__/plan": {
+          "visible": true
+        },
+        "/__NS__/local_plan": {
+          "visible": true
+        },
+        "/__NS__/global_costmap/published_footprint": {
+          "visible": true
+        },
+        "/__NS__/local_costmap/published_footprint": {
+          "visible": true
+        },
+        "/__NS__/particlecloud": {
+          "visible": false
+        }
+      },
+      "layers": {}
+    },
+    "Map!1": {
+      "topic": "/__NS__/map",
+      "followTf": "base_link"
+    },
+    "RawMessages!1": {
+      "topicPath": ""
+    }
+  },
+  "globalVariables": {},
+  "userScripts": {},
+  "layout": {
+    "first": "3D!1",
+    "second": {
+      "first": "Map!1",
+      "second": "RawMessages!1",
+      "direction": "column",
+      "splitPercentage": 60
+    },
+    "direction": "row",
+    "splitPercentage": 70
+  }
+}

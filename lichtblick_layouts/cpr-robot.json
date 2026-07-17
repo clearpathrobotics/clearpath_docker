@@ -1,0 +1,43 @@
+{
+  "configById": {
+    "3D!1": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 5,
+        "phi": 60,
+        "thetaOffset": 45,
+        "targetOffset": [0, 0, 0],
+        "target": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "fovy": 45
+      },
+      "followMode": "follow-pose",
+      "followTf": "base_link",
+      "scene": {
+        "backgroundColor": "#303030",
+        "enableStats": false
+      },
+      "transforms": {
+        "showLabel": false,
+        "enablePreloading": false
+      },
+      "topics": {
+        "/__NS__/robot_description": {
+          "visible": true
+        }
+      },
+      "layers": {}
+    },
+    "RawMessages!1": {
+      "topicPath": ""
+    }
+  },
+  "globalVariables": {},
+  "userScripts": {},
+  "layout": {
+    "first": "3D!1",
+    "second": "RawMessages!1",
+    "direction": "row",
+    "splitPercentage": 75
+  }
+}
