@@ -166,3 +166,63 @@ services:
         condition: service_healthy
     stdin_open: true
     tty: true
+
+  # Foxglove Bridge - WebSocket bridge for Lichtblick/Foxglove Studio
+  foxglove-bridge:
+    image: cpr-foxglove-bridge:${ROS_DISTRO:-jazzy}-local
+    container_name: cpr-foxglove-bridge-${ROS_DISTRO:-jazzy}
+    build:
+      context: .
+      dockerfile: cpr-foxglove-bridge.Dockerfile
+      args:
+        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+        CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
+        CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-latest
+    network_mode: host
+    environment:
+      SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
+      FOXGLOVE_BRIDGE_PORT: ${FOXGLOVE_BRIDGE_PORT:-8765}
+      WAIT_FOR_SIM: ${WAIT_FOR_SIM:-false}
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
+      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
+    volumes:
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/:ro
+    healthcheck:
+      test:
+        - "CMD"
+        - "bash"
+        - "-c"
+        - "nc -z localhost ${FOXGLOVE_BRIDGE_PORT:-8765}"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    stdin_open: true
+    tty: true
+
+  # Lichtblick Web - Browser-based robotics visualization
+  lichtblick:
+    image: cpr-lichtblick:${ROS_DISTRO:-jazzy}-local
+    container_name: cpr-lichtblick-${ROS_DISTRO:-jazzy}
+    build:
+      context: .
+      dockerfile: cpr-lichtblick.Dockerfile
+    ports:
+      - "${LICHTBLICK_PORT:-8080}:${LICHTBLICK_PORT:-8080}"
+    environment:
+      ROBOT_NAMESPACE: ${ROBOT_NAMESPACE:-a300_00000}
+      LICHTBLICK_PORT: ${LICHTBLICK_PORT:-8080}
+      LICHTBLICK_DEFAULT_LAYOUT: ${LICHTBLICK_DEFAULT_LAYOUT:-cpr-navigation}
+      FOXGLOVE_BRIDGE_PORT: ${FOXGLOVE_BRIDGE_PORT:-8765}
+    healthcheck:
+      test:
+        - "CMD"
+        - "sh"
+        - "-c"
+        - "wget -q --spider http://localhost:${LICHTBLICK_PORT:-8080}"
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 5s

@@ -205,6 +205,47 @@ Then open Lichtblick → **Open connection** → **Foxglove WebSocket** →
 | --- | --- | --- |
 | `FOXGLOVE_BRIDGE_PORT` | `8765` | WebSocket port for foxglove_bridge |
 
+### Lichtblick Web — [cpr-lichtblick.Dockerfile](cpr-lichtblick.Dockerfile)
+
+Built on the official `ghcr.io/lichtblick-suite/lichtblick` image. Serves the
+[Lichtblick](https://github.com/Lichtblick-Suite/lichtblick) web visualization
+tool with preconfigured Clearpath layouts that are automatically customized
+with the robot namespace.
+
+No X11 or GPU required — open http://localhost:8080 in any browser and connect
+to `foxglove_bridge` via WebSocket.
+
+The image ships with these layouts:
+
+| Layout | Description |
+| --- | --- |
+| `cpr-navigation` | 3D view with map, costmaps, and Nav2 plan overlays |
+| `cpr-robot` | 3D robot model viewer with raw message inspector |
+
+**Usage — with foxglove_bridge (connects to any running ROS 2 system):**
+
+```sh
+docker compose up foxglove-bridge lichtblick
+```
+
+Then open http://localhost:8080 → **Open connection** → **Foxglove WebSocket** →
+`ws://localhost:8765`.
+
+The default layout (`cpr-navigation`) is loaded automatically on first open.
+
+If you use **Import from file...** inside the browser UI, the file picker reads
+from your host machine (where the browser is running), not from inside the
+container.
+
+**Environment variables:**
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `ROBOT_NAMESPACE` | `a300_00000` | Robot namespace for topic paths in layouts |
+| `LICHTBLICK_DEFAULT_LAYOUT` | `cpr-navigation` | Layout loaded on first open (`cpr-navigation` or `cpr-robot`) |
+| `LICHTBLICK_PORT` | `8080` | Host port mapped to the web server |
+| `FOXGLOVE_BRIDGE_PORT` | `8765` | Shown in startup banner for user convenience |
+
 ### NVIDIA GPU overlay — [compose.nvidia.yaml](compose.nvidia.yaml)
 
 An optional compose overlay that enables NVIDIA GPU rendering for the `sim`
