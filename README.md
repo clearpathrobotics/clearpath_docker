@@ -129,7 +129,7 @@ ros2 launch clearpath_viz view_robot.launch.py namespace:=<namespace>
 ```
 
 The launcher automatically extracts the namespace from `robot.yaml` (e.g.,
-`a300_0000`, `a200_0000`). Runs on the same host network as sim, so RViz can
+`a300_00000`, `a200_0000`). Runs on the same host network as sim, so RViz can
 visualize robot state from the simulation.
 
 **Usage — Viz alone:**

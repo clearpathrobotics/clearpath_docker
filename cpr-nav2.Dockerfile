@@ -17,8 +17,6 @@ RUN apt-get update \
 
 COPY cpr-common.sh /usr/local/bin/cpr-common.sh
 COPY cpr-nav2-launch.sh /usr/local/bin/cpr-nav2-launch
-# TODO: remove once ros-${ROS_DISTRO}-clearpath-nav2-demos is released with rolling global costmap fix
-COPY nav2_config/ /opt/ros/${ROS_DISTRO}/share/clearpath_nav2_demos/config/
 RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-nav2-launch
 
 # Healthcheck: passes once bt_navigator and (optionally) slam_toolbox are alive.
