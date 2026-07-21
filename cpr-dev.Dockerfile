@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y \
   && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/*
 
-ARG USERNAME=ros
+ARG USERNAME=robot
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
 
