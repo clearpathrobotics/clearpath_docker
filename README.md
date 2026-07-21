@@ -24,7 +24,7 @@ for the dev and CI images.
 Headless server-side dev/build environment — no GUI tooling (no `rviz2`,
 `rqt`, X11 libs). Built on the base image. Adds `ros-build-essential`,
 common Python tooling (`pip`, `pep8`, `autopep8`, `pylint`), editors
-(`nano`, `vim`), `bash-completion`, and a non-root `ros` user (uid/gid
+(`nano`, `vim`), `bash-completion`, and a non-root `robot` user (uid/gid
 1000) with passwordless `sudo`. Bash history is redirected to
 `/commandhistory` so it can be persisted via a volume.
 
@@ -56,7 +56,7 @@ built for `humble` and `jazzy`.
 
 Built on the dev image. Installs the released
 `ros-<distro>-clearpath-gz` package, switches the default runtime user to
-`ros`, and launches:
+`robot`, and launches:
 
 ```sh
 ros2 launch clearpath_gz simulation.launch.py setup_path:=$HOME/setup/path/
@@ -79,7 +79,7 @@ configuration from `clearpath_nav2_demos`:
 ```sh
 ros2 launch clearpath_nav2_demos nav2.launch.py \
   use_sim_time:=true \
-  setup_path:=/home/ros/setup/path/
+  setup_path:=/home/robot/setup/path/
 ```
 
 The setup path must contain a `robot.yaml` that declares the platform serial
@@ -90,7 +90,7 @@ number — e.g. `j100-0000`, `a200-0000`. The namespace (`j100_0000`,
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `SETUP_PATH` | `/home/ros/setup/path/` | Path inside container to robot.yaml |
+| `SETUP_PATH` | `/home/robot/setup/path/` | Path inside container to robot.yaml |
 | `USE_SIM_TIME` | `true` | Use `/clock` from Gazebo sim |
 | `RMW_IMPLEMENTATION` | `rmw_cyclonedds_cpp` | ROS 2 middleware |
 | `SCAN_TOPIC` | _(unset)_ | Override the lidar scan topic (useful for 3D lidar) |
@@ -367,24 +367,24 @@ docker run --rm --network host \
 ## Using the dev image with a `ros2_ws`
 
 The dev image expects you to mount your ROS 2 workspace at
-`/home/ros/ros2_ws` and run as the `ros` user. A typical loop:
+`/home/robot/ros2_ws` and run as the `robot` user. A typical loop:
 
 ```sh
 mkdir -p ~/ros2_ws/src ~/.clearpath_docker_history
 
 docker run -it --rm \
   --name cpr-dev \
-  --user ros \
+  --user robot \
   --network host \
-  -v ~/ros2_ws:/home/ros/ros2_ws \
+  -v ~/ros2_ws:/home/robot/ros2_ws \
   -v ~/.clearpath_docker_history:/commandhistory \
-  -w /home/ros/ros2_ws \
+  -w /home/robot/ros2_ws \
   ghcr.io/clearpathrobotics/clearpath_docker:jazzy-dev-latest \
   bash
 ```
 
 Inside the container, `/opt/ros/<distro>/setup.bash` is sourced automatically
-by the `ros` user's `.bashrc`. Resolve dependencies and build with `colcon`:
+by the `robot` user's `.bashrc`. Resolve dependencies and build with `colcon`:
 
 ```sh
 sudo apt-get update
@@ -441,13 +441,13 @@ using the sim image defaults. The Gazebo GUI will forward to your host display v
 ROS_DISTRO=jazzy docker compose up sim
 ```
 
-By default, `SETUP_PATH` inside the container is `/home/ros/setup/path/`, and
+By default, `SETUP_PATH` inside the container is `/home/robot/setup/path/`, and
 that path is backed by `${HOME}/setup/path/` on the host. Override either side
 as needed:
 
 ```sh
 SETUP_PATH_HOST=$HOME/my_setup_path \
-SETUP_PATH=/home/ros/setup/path/ \
+SETUP_PATH=/home/robot/setup/path/ \
 docker compose up sim
 ```
 
@@ -479,7 +479,7 @@ copy [compose.override.yaml.example](compose.override.yaml.example) to
 
 #### Matching your host uid/gid (non-1000 users)
 
-The published dev image bakes the `ros` user at uid/gid 1000, so files it
+The published dev image bakes the `robot` user at uid/gid 1000, so files it
 creates in the mounted workspace are owned by uid 1000 on the host. If
 your host user is not 1000, use the `dev-local` service in
 [compose.yaml](compose.yaml) instead — it rebuilds `cpr-dev.Dockerfile`
@@ -495,7 +495,7 @@ Set `USER_UID` / `USER_GID` in `.env` to avoid re-typing them.
 
 ### Hardware access (USB, serial, network)
 
-The dev image runs as the non-root `ros` user (uid/gid 1000). To talk to
+The dev image runs as the non-root `robot` user (uid/gid 1000). To talk to
 host hardware you usually need to pass the device through *and* match the
 host group that owns the device node.
 

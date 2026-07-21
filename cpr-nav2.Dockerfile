@@ -30,7 +30,7 @@ HEALTHCHECK --interval=10s --timeout=10s --start-period=120s --retries=24 \
     ( [[ "${NAV2_ENABLE_SLAM:-false}" != "true" ]] || ros2 node list --no-daemon 2>/dev/null | grep -qE "slam_toolbox" )'
 
 ENV DEBIAN_FRONTEND=
-USER ros
-WORKDIR /home/ros
+USER robot
+WORKDIR /home/robot
 
 CMD ["/usr/local/bin/cpr-nav2-launch"]

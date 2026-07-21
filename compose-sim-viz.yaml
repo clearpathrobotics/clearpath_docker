@@ -12,16 +12,16 @@ services:
   sim:
     image: ghcr.io/clearpathrobotics/clearpath_docker:${ROS_DISTRO:-jazzy}-sim-latest
     container_name: cpr-sim-${ROS_DISTRO:-jazzy}
-    user: ros
+    user: robot
     network_mode: host
     ipc: host
     environment:
-      SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
+      SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/robot/setup/path/
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
+      - ${HOME}/.Xauthority:/home/robot/.Xauthority:ro
     healthcheck:
       test:
         - "CMD"
@@ -41,18 +41,18 @@ services:
   viz:
     image: ghcr.io/clearpathrobotics/clearpath_docker:${ROS_DISTRO:-jazzy}-viz-latest
     container_name: cpr-viz-${ROS_DISTRO:-jazzy}
-    user: ros
+    user: robot
     network_mode: host
     devices:
       - /dev/dri:/dev/dri
     ipc: host
     environment:
-      SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
+      SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/:ro
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/robot/setup/path/:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
+      - ${HOME}/.Xauthority:/home/robot/.Xauthority:ro
     healthcheck:
       test:
         - "CMD"

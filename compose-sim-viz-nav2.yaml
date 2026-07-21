@@ -16,21 +16,21 @@ services:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
         CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
         CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-dev-latest
-    user: ros
+    user: robot
     network_mode: host
     ipc: host
     environment:
-      SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
+      SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/robot/setup/path/
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
-      - gz_fuel_cache:/home/ros/.gz/fuel
+      - ${HOME}/.Xauthority:/home/robot/.Xauthority:ro
+      - gz_fuel_cache:/home/robot/.gz/fuel
     stdin_open: true
     tty: true
 
@@ -44,10 +44,10 @@ services:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
         CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
         CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-dev-latest
-    user: ros
+    user: robot
     network_mode: host
     environment:
-      SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
+      SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
       USE_SIM_TIME: ${USE_SIM_TIME:-true}
       SCAN_TOPIC: ${SCAN_TOPIC:-}
       NAV2_LAUNCH_FILE: ${NAV2_LAUNCH_FILE:-nav2.launch.py}
@@ -58,7 +58,7 @@ services:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/:ro
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/robot/setup/path/:ro
     healthcheck:
       test:
         - "CMD"
@@ -88,13 +88,13 @@ services:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
         CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
         CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-dev-latest
-    user: ros
+    user: robot
     network_mode: host
     devices:
       - /dev/dri:/dev/dri
     ipc: host
     environment:
-      SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
+      SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
       CLEARPATH_VIZ_CONFIG: ${CLEARPATH_VIZ_CONFIG:-navigation}
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
@@ -102,9 +102,9 @@ services:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/:ro
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/robot/setup/path/:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
+      - ${HOME}/.Xauthority:/home/robot/.Xauthority:ro
     healthcheck:
       test:
         - "CMD"

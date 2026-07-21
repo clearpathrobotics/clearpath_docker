@@ -14,8 +14,8 @@
 #   ROS_DISTRO  - humble | jazzy | lyrical | rolling (default: jazzy)
 #   ROS2_WS     - path to your ROS 2 workspace on the host (default: ~/ros2_ws)
 #   SETUP_PATH  - setup path passed to clearpath_gz simulation launch
-#                 (default in container: /home/ros/setup/path/)
-#   SETUP_PATH_HOST - host directory to mount into /home/ros/setup/path/
+#                 (default in container: /home/robot/setup/path/)
+#   SETUP_PATH_HOST - host directory to mount into /home/robot/setup/path/
 #                     (default: $HOME/clearpath/)
 #   USE_SIM_TIME - true/false for Nav2 demos in simulation (default: true)
 #   SCAN_TOPIC   - optional lidar topic override for 3D lidar setups
@@ -27,11 +27,11 @@ services:
   dev:
     image: ghcr.io/clearpathrobotics/clearpath_docker:${ROS_DISTRO:-jazzy}-dev-latest
     container_name: cpr-dev-${ROS_DISTRO:-jazzy}
-    user: ros
+    user: robot
     network_mode: host
-    working_dir: /home/ros/ros2_ws
+    working_dir: /home/robot/ros2_ws
     volumes:
-      - ${ROS2_WS:-~/ros2_ws}:/home/ros/ros2_ws
+      - ${ROS2_WS:-~/ros2_ws}:/home/robot/ros2_ws
       - ${HOME}/.clearpath_docker_history:/commandhistory
     stdin_open: true
     tty: true
@@ -61,20 +61,20 @@ services:
   sim:
     image: ghcr.io/clearpathrobotics/clearpath_docker:${ROS_DISTRO:-jazzy}-sim-latest
     container_name: cpr-sim-${ROS_DISTRO:-jazzy}
-    user: ros
+    user: robot
     network_mode: host
     ipc: host
     environment:
-      SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
+      SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/robot/setup/path/
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
+      - ${HOME}/.Xauthority:/home/robot/.Xauthority:ro
     healthcheck:
       test:
         - "CMD"
@@ -101,10 +101,10 @@ services:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
         CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
         CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-dev-latest
-    user: ros
+    user: robot
     network_mode: host
     environment:
-      SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
+      SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
       USE_SIM_TIME: ${USE_SIM_TIME:-true}
       SCAN_TOPIC: ${SCAN_TOPIC:-}
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
@@ -112,7 +112,7 @@ services:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/:ro
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/robot/setup/path/:ro
     healthcheck:
       test:
         - "CMD"
@@ -135,22 +135,22 @@ services:
   viz:
     image: ghcr.io/clearpathrobotics/clearpath_docker:${ROS_DISTRO:-jazzy}-viz-latest
     container_name: cpr-viz-${ROS_DISTRO:-jazzy}
-    user: ros
+    user: robot
     network_mode: host
     devices:
       - /dev/dri:/dev/dri
     ipc: host
     environment:
-      SETUP_PATH: ${SETUP_PATH:-/home/ros/setup/path/}
+      SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/ros/setup/path/:ro
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/robot/setup/path/:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ${HOME}/.Xauthority:/home/ros/.Xauthority:ro
+      - ${HOME}/.Xauthority:/home/robot/.Xauthority:ro
     healthcheck:
       test:
         - "CMD"
@@ -164,5 +164,59 @@ services:
     depends_on:
       sim:
         condition: service_healthy
+    stdin_open: true
+    tty: true
+
+  # ─── Robot (real hardware) ────────────────────────────────────────────
+  # Controls the physical robot via USB, Ethernet, and CAN bus.
+  # Requires: ROBOT_YAML env var pointing to your robot.yaml on the host.
+  #
+  # Usage:
+  #   ROBOT_YAML=/path/to/robot.yaml docker compose up robot
+  #   ROS_DISTRO=humble ROBOT_YAML=/path/to/robot.yaml docker compose up robot
+  robot:
+    image: cpr-robot:${ROS_DISTRO:-jazzy}-local
+    container_name: cpr-robot-${ROS_DISTRO:-jazzy}
+    build:
+      context: .
+      dockerfile: cpr-robot.Dockerfile
+      args:
+        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+        CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
+        CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-latest
+    privileged: true
+    network_mode: host
+    cgroup: host
+    environment:
+      container: docker
+      SETUP_PATH: /etc/clearpath/
+      ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
+    volumes:
+      - ${SETUP_PATH_HOST:?SETUP_PATH_HOST must be set to the directory containing robot.yaml}:/etc/clearpath/
+      - /dev:/dev
+      - /run/udev:/run/udev:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+      - NET_RAW
+    tmpfs:
+      - /run
+      - /run/lock
+    healthcheck:
+      test:
+        - "CMD"
+        - "bash"
+        - "-c"
+        - >-
+          source /opt/ros/${ROS_DISTRO:-jazzy}/setup.bash &&
+          ros2 node list --no-daemon 2>/dev/null | grep -qE "platform"
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 60s
     stdin_open: true
     tty: true

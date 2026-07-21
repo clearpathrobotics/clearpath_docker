@@ -17,7 +17,7 @@ services:
     # device_cgroup_rules:
     #   - 'c 189:* rmw'
 
-    # Match host groups so the `ros` user can access devices owned by
+    # Match host groups so the `robot` user can access devices owned by
     # root:dialout / root:plugdev without running as root:
     # group_add:
     #   - dialout

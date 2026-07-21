@@ -18,5 +18,5 @@ RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-viz-launch
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-USER ros
+USER robot
 CMD ["/usr/local/bin/cpr-viz-launch"]

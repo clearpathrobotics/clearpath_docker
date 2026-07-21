@@ -31,7 +31,7 @@ HEALTHCHECK --interval=10s --timeout=15s --start-period=120s --retries=24 \
     ros2 topic list --no-daemon 2>/dev/null | grep -qE "/[^/]+/platform/odom/filtered$"'
 
 ENV DEBIAN_FRONTEND=
-USER ros
-WORKDIR /home/ros
+USER robot
+WORKDIR /home/robot
 
 CMD ["/usr/local/bin/cpr-sim-launch"]
