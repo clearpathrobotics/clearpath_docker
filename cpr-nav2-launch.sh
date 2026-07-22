@@ -9,7 +9,7 @@ scan_topic="${SCAN_TOPIC:-}"
 launch_file="${NAV2_LAUNCH_FILE:-nav2.launch.py}"
 enable_slam="${NAV2_ENABLE_SLAM:-false}"
 slam_sync="${NAV2_SLAM_SYNC:-false}"
-auto_nav2_startup="${AUTO_NAV2_STARTUP:-false}"
+auto_nav2_startup="${AUTO_NAV2_STARTUP:-true}"
 wait_for_sim="${WAIT_FOR_SIM:-false}"
 startup_timeout_s="${NAV2_STARTUP_TIMEOUT_S:-120}"
 service_call_timeout_s="${NAV2_SERVICE_CALL_TIMEOUT_S:-8}"
@@ -182,6 +182,7 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
+log_robot_yaml
 log_robot_identity
 
 ros2 launch clearpath_nav2_demos "${launch_file}" "${args[@]}" "$@"

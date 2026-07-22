@@ -1,5 +1,5 @@
 # Compose file for running sim and viz containers together.
-# These containers communicate via ROS2 using host network.
+# These containers communicate via ROS 2 using host network.
 #
 # Usage:
 #   xhost +local:
@@ -49,6 +49,10 @@ services:
     environment:
       SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
+      ROBOT_NAMESPACE: ${ROBOT_NAMESPACE:-}
+      USE_SIM_TIME: ${USE_SIM_TIME:-true}
+      WAIT_FOR_TIMEOUT_SEC: ${WAIT_FOR_TIMEOUT_SEC:-120}
+      CLEARPATH_VIZ_CONFIG: ${CLEARPATH_VIZ_CONFIG:-robot}
     volumes:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/robot/setup/path/:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:rw

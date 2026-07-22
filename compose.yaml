@@ -67,6 +67,9 @@ services:
     environment:
       SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
+      SIM_STARTUP_TIMEOUT_S: ${SIM_STARTUP_TIMEOUT_S:-120}
+      GAZEBO_STARTUP_TIMEOUT: ${GAZEBO_STARTUP_TIMEOUT:-120}
+      GAZEBO_MAX_RESTARTS: ${GAZEBO_MAX_RESTARTS:-3}
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
@@ -105,8 +108,18 @@ services:
     network_mode: host
     environment:
       SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
+      ROBOT_NAMESPACE: ${ROBOT_NAMESPACE:-}
       USE_SIM_TIME: ${USE_SIM_TIME:-true}
+      WAIT_FOR_SIM: ${WAIT_FOR_SIM:-false}
+      WAIT_FOR_TIMEOUT_SEC: ${WAIT_FOR_TIMEOUT_SEC:-120}
       SCAN_TOPIC: ${SCAN_TOPIC:-}
+      NAV2_LAUNCH_FILE: ${NAV2_LAUNCH_FILE:-nav2.launch.py}
+      NAV2_ENABLE_SLAM: ${NAV2_ENABLE_SLAM:-false}
+      NAV2_SLAM_SYNC: ${NAV2_SLAM_SYNC:-false}
+      NAV2_STARTUP_TIMEOUT_S: ${NAV2_STARTUP_TIMEOUT_S:-120}
+      NAV2_SERVICE_CALL_TIMEOUT_S: ${NAV2_SERVICE_CALL_TIMEOUT_S:-8}
+      NAV2_ACTIVE_WAIT_TIMEOUT_S: ${NAV2_ACTIVE_WAIT_TIMEOUT_S:-60}
+      NAV2_TOPIC_WAIT_TIMEOUT_S: ${NAV2_TOPIC_WAIT_TIMEOUT_S:-120}
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
@@ -143,6 +156,10 @@ services:
     environment:
       SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
+      ROBOT_NAMESPACE: ${ROBOT_NAMESPACE:-}
+      USE_SIM_TIME: ${USE_SIM_TIME:-true}
+      WAIT_FOR_TIMEOUT_SEC: ${WAIT_FOR_TIMEOUT_SEC:-120}
+      CLEARPATH_VIZ_CONFIG: ${CLEARPATH_VIZ_CONFIG:-robot}
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
@@ -169,29 +186,24 @@ services:
 
   # ─── Robot (real hardware) ────────────────────────────────────────────
   # Controls the physical robot via USB, Ethernet, and CAN bus.
-  # Requires: ROBOT_YAML env var pointing to your robot.yaml on the host.
+  # Requires: SETUP_PATH_HOST pointing to a directory containing robot.yaml.
   #
   # Usage:
-  #   ROBOT_YAML=/path/to/robot.yaml docker compose up robot
-  #   ROS_DISTRO=humble ROBOT_YAML=/path/to/robot.yaml docker compose up robot
+  #   SETUP_PATH_HOST=$HOME/clearpath docker compose up robot
+  #   ROS_DISTRO=humble RMW_IMPLEMENTATION=rmw_fastrtps_cpp SETUP_PATH_HOST=$HOME/clearpath docker compose up robot
   robot:
-    image: cpr-robot:${ROS_DISTRO:-jazzy}-local
+    image: ghcr.io/clearpathrobotics/clearpath_docker:${ROS_DISTRO:-jazzy}-robot-latest
     container_name: cpr-robot-${ROS_DISTRO:-jazzy}
-    build:
-      context: .
-      dockerfile: cpr-robot.Dockerfile
-      args:
-        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
-        CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
-        CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-latest
     privileged: true
     network_mode: host
     cgroup: host
     environment:
       container: docker
-      SETUP_PATH: /etc/clearpath/
+      SETUP_PATH: ${SETUP_PATH:-/etc/clearpath/}
       ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+      # Humble robot firmware requires FastDDS — set RMW_IMPLEMENTATION=rmw_fastrtps_cpp when using ROS_DISTRO=humble.
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
+      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:

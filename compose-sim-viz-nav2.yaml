@@ -1,5 +1,5 @@
 # Compose file for running sim, nav2, and viz containers together.
-# These containers communicate via ROS2 using host network.
+# These containers communicate via ROS 2 using host network.
 #
 # Usage:
 #   xhost +local:
@@ -22,6 +22,9 @@ services:
     environment:
       SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
+      SIM_STARTUP_TIMEOUT_S: ${SIM_STARTUP_TIMEOUT_S:-120}
+      GAZEBO_STARTUP_TIMEOUT: ${GAZEBO_STARTUP_TIMEOUT:-120}
+      GAZEBO_MAX_RESTARTS: ${GAZEBO_MAX_RESTARTS:-3}
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
@@ -48,11 +51,18 @@ services:
     network_mode: host
     environment:
       SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
+      ROBOT_NAMESPACE: ${ROBOT_NAMESPACE:-}
       USE_SIM_TIME: ${USE_SIM_TIME:-true}
+      WAIT_FOR_SIM: ${WAIT_FOR_SIM:-false}
+      WAIT_FOR_TIMEOUT_SEC: ${WAIT_FOR_TIMEOUT_SEC:-120}
       SCAN_TOPIC: ${SCAN_TOPIC:-}
       NAV2_LAUNCH_FILE: ${NAV2_LAUNCH_FILE:-nav2.launch.py}
       NAV2_ENABLE_SLAM: ${NAV2_ENABLE_SLAM:-true}
-      AUTO_NAV2_STARTUP: ${AUTO_NAV2_STARTUP:-true}
+      NAV2_SLAM_SYNC: ${NAV2_SLAM_SYNC:-false}
+      NAV2_STARTUP_TIMEOUT_S: ${NAV2_STARTUP_TIMEOUT_S:-120}
+      NAV2_SERVICE_CALL_TIMEOUT_S: ${NAV2_SERVICE_CALL_TIMEOUT_S:-8}
+      NAV2_ACTIVE_WAIT_TIMEOUT_S: ${NAV2_ACTIVE_WAIT_TIMEOUT_S:-60}
+      NAV2_TOPIC_WAIT_TIMEOUT_S: ${NAV2_TOPIC_WAIT_TIMEOUT_S:-120}
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
@@ -96,6 +106,9 @@ services:
     environment:
       SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
       DISPLAY: ${DISPLAY:-:0}
+      ROBOT_NAMESPACE: ${ROBOT_NAMESPACE:-}
+      USE_SIM_TIME: ${USE_SIM_TIME:-true}
+      WAIT_FOR_TIMEOUT_SEC: ${WAIT_FOR_TIMEOUT_SEC:-120}
       CLEARPATH_VIZ_CONFIG: ${CLEARPATH_VIZ_CONFIG:-navigation}
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}

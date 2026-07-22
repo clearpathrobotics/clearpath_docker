@@ -50,5 +50,7 @@ RUN wget https://raw.githubusercontent.com/clearpathrobotics/public-rosdistro/ma
 
 ENV DEBIAN_FRONTEND=
 
+WORKDIR /
+
 LABEL com.clearpathrobotics.vendor="Clearpath Robotics"
 LABEL org.opencontainers.image.source="https://github.com/clearpathrobotics/clearpath_docker"

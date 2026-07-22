@@ -6,6 +6,20 @@
 # Default setup path; override by setting SETUP_PATH before sourcing.
 setup_path="${SETUP_PATH:-$HOME/setup/path/}"
 
+# log_robot_yaml [yaml_file]
+#
+# Prints the resolved path to robot.yaml and its contents to stderr.
+log_robot_yaml() {
+  local yaml_file="${1:-${setup_path}/robot.yaml}"
+  echo "[cpr] robot.yaml path: ${yaml_file}" >&2
+  if [[ -f "${yaml_file}" ]]; then
+    echo "[cpr] robot.yaml contents:" >&2
+    cat "${yaml_file}" >&2
+  else
+    echo "[cpr] robot.yaml not found at ${yaml_file}" >&2
+  fi
+}
+
 # detect_namespace [yaml_file]
 #
 # Prints the robot namespace and returns 0.

@@ -56,7 +56,7 @@ jobs:
             type=semver,pattern={{major}}
             type=schedule,pattern=nightly
 
-      - name: Build and push Docker image
+      - name: Build and push base image
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -189,7 +189,7 @@ jobs:
             type=semver,pattern={{major}}
             type=schedule,pattern=nightly
 
-      - name: Build and push common image (amd64 only)
+      - name: Build and push ci-common image (amd64 only)
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -203,7 +203,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  robot:
+  ci-robot:
     needs: ci
     runs-on: ubuntu-latest
     strategy:
@@ -257,11 +257,83 @@ jobs:
             type=semver,pattern={{major}}
             type=schedule,pattern=nightly
 
-      - name: Build and push robot image (amd64 only)
+      - name: Build and push ci-robot image (amd64 only)
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./cpr-ci-robot.Dockerfile
+          push: true
+          platforms: linux/amd64
+          build-args: |
+            ROS_DISTRO=${{ matrix.ros_distro }}
+            CPR_BASE_IMAGE=ghcr.io/${{ github.repository }}
+            CPR_BASE_TAG=${{ steps.base_meta.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  robot:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ros_distro: jazzy
+            dockerfile: cpr-robot.Dockerfile
+          - ros_distro: humble
+            dockerfile: cpr-robot-humble.Dockerfile
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract base image metadata (to derive CPR_BASE_TAG)
+        id: base_meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          flavor: |
+            prefix=${{ matrix.ros_distro }}-,onlatest=true
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-pr-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=schedule,pattern=nightly
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          flavor: |
+            prefix=${{ matrix.ros_distro }}-robot-,onlatest=true
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-robot-pr-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=schedule,pattern=nightly
+
+      - name: Build and push robot image (amd64 only)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./${{ matrix.dockerfile }}
           push: true
           platforms: linux/amd64
           build-args: |

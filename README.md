@@ -86,20 +86,7 @@ The setup path must contain a `robot.yaml` that declares the platform serial
 number — e.g. `j100-0000`, `a200-0000`. The namespace (`j100_0000`,
 `a200_0000`) is derived automatically from `platform.id` in that file.
 
-**Environment variables:**
-
-| Variable | Default | Description |
-| --- | --- | --- |
-| `SETUP_PATH` | `/home/robot/setup/path/` | Path inside container to robot.yaml |
-| `USE_SIM_TIME` | `true` | Use `/clock` from Gazebo sim |
-| `RMW_IMPLEMENTATION` | `rmw_cyclonedds_cpp` | ROS 2 middleware |
-| `SCAN_TOPIC` | _(unset)_ | Override the lidar scan topic (useful for 3D lidar) |
-| `NAV2_LAUNCH_FILE` | `nav2.launch.py` | Launch file; use `slam.launch.py` to start in SLAM-only mode |
-| `NAV2_ENABLE_SLAM` | `false` | When `true`, runs `slam.launch.py` alongside `nav2.launch.py` |
-| `AUTO_NAV2_STARTUP` | `false` | When `true`, automatically calls the lifecycle manager startup service and retries until all navigation nodes are active |
-| `NAV2_STARTUP_TIMEOUT_S` | `120` | Seconds to wait for the lifecycle manager service to appear |
-| `NAV2_SERVICE_CALL_TIMEOUT_S` | `8` | Per-call timeout for lifecycle service calls |
-| `NAV2_ACTIVE_WAIT_TIMEOUT_S` | `60` | Seconds to wait for all navigation nodes to reach active state |
+See [Compose environment variables](#compose-environment-variables) for all available variables.
 
 The `AUTO_NAV2_STARTUP` bootstrap calls the lifecycle manager startup service,
 then issues a pause/resume cycle to converge any nodes that lost the startup
@@ -160,7 +147,7 @@ xhost +local:
 ROS_DISTRO=jazzy docker compose -f compose-sim-viz-nav2.yaml -f compose.nvidia.yaml up
 ```
 
-See [compose.nvidia.yaml](compose.nvidia.yaml) for prerequisites and details.
+For prerequisites and full details, see the [NVIDIA GPU overlay](#nvidia-gpu-overlay----composenvidiayaml) section.
 
 The dedicated `compose-sim-viz-nav2.yaml` stack defaults `NAV2_LAUNCH_FILE` to
 `nav2.launch.py` and sets `NAV2_ENABLE_SLAM=true`, so both Nav2 and SLAM start
@@ -169,7 +156,7 @@ automatically without manual steps. It also enables
 to converge Nav2 nodes into an active state.
 
 In the RViz window, use the RobotModel and TF displays to inspect the simulated
-robot. Both containers share the host network and ROS domain, so ROS2 topics
+robot. Both containers share the host network and ROS domain, so ROS 2 topics
 and services flow between them automatically.
 
 This variant is only built for `humble` and `jazzy`.
@@ -199,11 +186,87 @@ docker compose up sim foxglove-bridge
 Then open Lichtblick → **Open connection** → **Foxglove WebSocket** →
 `ws://localhost:8765`.
 
-**Environment variables:**
+See [Compose environment variables](#compose-environment-variables) for all available variables.
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `FOXGLOVE_BRIDGE_PORT` | `8765` | WebSocket port for foxglove_bridge |
+### Robot — [cpr-robot.Dockerfile](cpr-robot.Dockerfile) / [cpr-robot-humble.Dockerfile](cpr-robot-humble.Dockerfile)
+
+Locally-built image that runs the full Clearpath robot stack on real hardware.
+Uses `systemd` as PID 1 to manage the clearpath platform, sensor, and
+manipulator services. Requires a `robot.yaml` mounted at `/etc/clearpath/`.
+
+Two Dockerfiles are provided:
+
+| Dockerfile | Distro | Default user | Published tag |
+| --- | --- | --- | --- |
+| `cpr-robot.Dockerfile` | Jazzy+ | `robot` | `jazzy-robot-latest` |
+| `cpr-robot-humble.Dockerfile` | Humble | `administrator` | `humble-robot-latest` |
+
+The active Dockerfile is controlled by the `ROBOT_DOCKERFILE` compose variable
+(see [Compose environment variables](#compose-environment-variables) below).
+
+**Pull and run — Jazzy (default):**
+
+```sh
+SETUP_PATH_HOST=$HOME/clearpath docker compose up -d robot
+```
+
+**Pull and run — Humble:**
+
+```sh
+ROBOT_DOCKERFILE=cpr-robot-humble.Dockerfile \
+  ROS_DISTRO=humble \
+  RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
+  SETUP_PATH_HOST=$HOME/clearpath \
+  docker compose up -d robot
+```
+
+**Exec into the container:**
+
+```sh
+# Jazzy
+docker compose exec --user robot robot bash
+
+# Humble
+docker compose exec --user administrator robot bash
+```
+
+Or directly by container name (without Compose):
+
+```sh
+# Jazzy
+docker exec -it --user robot cpr-robot-jazzy bash
+
+# Humble
+docker exec -it --user administrator cpr-robot-humble bash
+```
+
+**Running ROS 2 CLI commands:**
+
+Once inside the container, source the generated setup file before using any
+`ros2` commands. This file is produced by `clearpath_robot install` and sources
+the correct ROS distro overlay together with any workspace extensions:
+
+```sh
+source /etc/clearpath/setup.bash
+```
+
+You can then use any ROS 2 CLI tool. The robot namespace (e.g. `a300_00000`)
+comes from `platform.id` in your `robot.yaml`:
+
+```sh
+# List all active nodes
+ros2 node list
+
+# List all topics
+ros2 topic list
+
+# Echo odometry (replace <namespace> with your robot's namespace, e.g. a300_00000)
+ros2 topic echo /<namespace>/platform/odom/filtered
+
+Source `/etc/clearpath/setup.bash` in every new shell; the container's default
+`~/.bashrc` does **not** source it automatically.
+
+> **Note (Humble only):** The MCU firmware requires FastDDS — set `RMW_IMPLEMENTATION=rmw_fastrtps_cpp` when running on Humble. CycloneDDS will not communicate with the robot hardware.
 
 ### NVIDIA GPU overlay — [compose.nvidia.yaml](compose.nvidia.yaml)
 
@@ -223,8 +286,13 @@ sudo systemctl restart docker
 **Usage** (layer on top of any sim-containing compose file):
 
 ```sh
-docker compose -f compose-sim-viz-nav2.yaml -f compose.nvidia.yaml up
-docker compose -f compose-sim-viz.yaml       -f compose.nvidia.yaml up
+xhost +local:
+
+# Sim + Viz
+ROS_DISTRO=jazzy docker compose -f compose-sim-viz.yaml -f compose.nvidia.yaml up
+
+# Sim + Nav2 + Viz
+ROS_DISTRO=jazzy docker compose -f compose-sim-viz-nav2.yaml -f compose.nvidia.yaml up
 ```
 
 ### Supported ROS 2 distros
@@ -242,6 +310,7 @@ Tags are produced by the GitHub Actions workflow and follow this scheme:
 | CI   | `<distro>-ci-latest`, `<distro>-ci-<branch>`, `<distro>-ci-pr-<n>`, `<distro>-ci-<semver>`, `<distro>-ci-nightly` |
 | CI Common | `<distro>-ci-common-latest`, `<distro>-ci-common-<branch>`, `<distro>-ci-common-pr-<n>`, `<distro>-ci-common-<semver>`, `<distro>-ci-common-nightly` where `<distro>` is `humble` or `jazzy` |
 | CI Robot | `<distro>-ci-robot-latest`, `<distro>-ci-robot-<branch>`, `<distro>-ci-robot-pr-<n>`, `<distro>-ci-robot-<semver>`, `<distro>-ci-robot-nightly` where `<distro>` is `humble` or `jazzy` |
+| Robot | `<distro>-robot-latest`, `<distro>-robot-<branch>`, `<distro>-robot-pr-<n>`, `<distro>-robot-<semver>`, `<distro>-robot-nightly` where `<distro>` is `humble` or `jazzy` |
 | Sim | `<distro>-sim-latest`, `<distro>-sim-<branch>`, `<distro>-sim-pr-<n>`, `<distro>-sim-<semver>`, `<distro>-sim-nightly` where `<distro>` is `humble` or `jazzy` |
 | Nav2 Demos | local-compose image from `cpr-nav2.Dockerfile` |
 | Viz | `<distro>-viz-latest`, `<distro>-viz-<branch>`, `<distro>-viz-pr-<n>`, `<distro>-viz-<semver>`, `<distro>-viz-nightly` where `<distro>` is `humble` or `jazzy` |
@@ -471,11 +540,49 @@ Also grant X11 access to local docker connections before launching:
 xhost +local:
 ```
 
-`ROS_DISTRO`, `ROS2_WS`, `SETUP_PATH`, and `SETUP_PATH_HOST` can also be set
-in a `.env` file (git-ignored).
+`ROS_DISTRO`, `ROS2_WS`, `SETUP_PATH`, `SETUP_PATH_HOST`, and any other
+variable below can also be set in a `.env` file (git-ignored).
 For host-specific tweaks (USB passthrough, extra `group_add`, etc.),
 copy [compose.override.yaml.example](compose.override.yaml.example) to
 `compose.override.yaml` and edit — Compose merges it automatically.
+
+### Compose environment variables
+
+All variables can be passed on the command line or set in a `.env` file.
+
+| Variable | Default | Services | Description |
+| --- | --- | --- | --- |
+| `ROS_DISTRO` | `jazzy` | all | ROS 2 distribution (`humble`, `jazzy`, `lyrical`, `rolling`) |
+| `ROBOT_DOCKERFILE` | `cpr-robot.Dockerfile` | robot | Dockerfile for the robot service; use `cpr-robot-humble.Dockerfile` for Humble |
+| `CLEARPATH_USER` | `robot` | robot | User that runs clearpath services (`administrator` for Humble) |
+| `SETUP_PATH_HOST` | `$HOME/clearpath/` | robot, sim, nav2, viz | **Host-side** path to the directory containing `robot.yaml`; mounted into the container at `SETUP_PATH` |
+| `SETUP_PATH` | `/home/robot/setup/path/` | sim, nav2, viz | **Container-side** mount point for the setup directory (the other end of `SETUP_PATH_HOST`) |
+| `ROS2_WS` | `~/ros2_ws` | dev, dev-local | Host workspace path mounted into the container |
+| `USER_UID` | `1000` | dev-local | Host user UID — used to match file ownership in the mounted workspace |
+| `USER_GID` | `1000` | dev-local | Host user GID — used to match file ownership in the mounted workspace |
+| `RMW_IMPLEMENTATION` | `rmw_cyclonedds_cpp` | sim, nav2, viz, robot | ROS 2 middleware — Humble robot containers must use `rmw_fastrtps_cpp` (firmware requirement) |
+| `ROS_AUTOMATIC_DISCOVERY_RANGE` | `LOCALHOST` | sim, nav2, viz | DDS participant discovery scope |
+| `ROS_DOMAIN_ID` | `0` | sim, nav2, viz, robot | ROS domain ID |
+| `CYCLONEDDS_URI` | (inline XML) | sim, nav2, viz, robot | CycloneDDS configuration XML |
+| `DISPLAY` | `:0` | sim, viz | X11 display target |
+| `USE_SIM_TIME` | `true` | nav2, viz | Use `/clock` from Gazebo instead of wall time |
+| `CLEARPATH_VIZ_CONFIG` | `robot` | viz | RViz config profile (`robot` or `navigation`) |
+| `ROBOT_NAMESPACE` | _(auto-detect)_ | nav2, viz | Override the robot namespace (normally read from `robot.yaml`) |
+| `WAIT_FOR_SIM` | `false` | nav2 | Wait for `/clock` before starting Nav2 |
+| `WAIT_FOR_TIMEOUT_SEC` | `120` | nav2, viz | Seconds to wait for sim topics when `WAIT_FOR_SIM=true` |
+| `SCAN_TOPIC` | _(unset)_ | nav2 | Override the lidar scan topic (useful for 3D lidar) |
+| `NAV2_LAUNCH_FILE` | `nav2.launch.py` | nav2 | Nav2 launch file; use `slam.launch.py` for SLAM-only mode |
+| `NAV2_ENABLE_SLAM` | `false` | nav2 | Run `slam.launch.py` alongside `nav2.launch.py` |
+| `NAV2_SLAM_SYNC` | `false` | nav2 | Run SLAM in synchronous mode |
+| `AUTO_NAV2_STARTUP` | `true` | nav2 | Auto-call the lifecycle manager startup service on container start |
+| `NAV2_STARTUP_TIMEOUT_S` | `120` | nav2 | Seconds to wait for the lifecycle manager service to appear |
+| `NAV2_SERVICE_CALL_TIMEOUT_S` | `8` | nav2 | Per-call timeout for lifecycle service calls |
+| `NAV2_ACTIVE_WAIT_TIMEOUT_S` | `60` | nav2 | Seconds to wait for all navigation nodes to reach active state |
+| `NAV2_TOPIC_WAIT_TIMEOUT_S` | `120` | nav2 | Seconds to wait for odom/TF topics before Nav2 bringup |
+| `SIM_STARTUP_TIMEOUT_S` | `120` | sim | Seconds to wait for the simulation stack to become ready |
+| `GAZEBO_STARTUP_TIMEOUT` | `120` | sim | Seconds to wait for the Gazebo process to start |
+| `GAZEBO_MAX_RESTARTS` | `3` | sim | Max times the Gazebo watchdog will restart Gazebo on failure |
+| `FOXGLOVE_BRIDGE_PORT` | `8765` | foxglove-bridge | WebSocket port for `foxglove_bridge` |
 
 #### Matching your host uid/gid (non-1000 users)
 
@@ -533,8 +640,9 @@ builds and pushes the base, dev, and CI variants for every supported distro,
 plus the Humble- and Jazzy-only common, robot, and sim variants, to GHCR on
 pushes to `main`, on version tags (`v*`), on pull requests, and nightly at
 00:00 UTC. The dev and CI builds wait for the base build and reuse the tag
-produced for the same ref; the common and robot builds wait for the CI build
-and reuse its tag; the sim build waits for the dev build and reuses its tag.
+produced for the same ref; the common and robot (CI and runtime) builds wait
+for the CI and base builds respectively and reuse their tags; the sim build
+waits for the dev build and reuses its tag.
 
 ## License
 

@@ -4,6 +4,7 @@ set -euo pipefail
 # shellcheck source=cpr-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/cpr-common.sh"
 
+log_robot_yaml
 namespace="$(detect_namespace)"
 namespace="${namespace:-a300_00000}"
 use_sim_time="${USE_SIM_TIME:-true}"

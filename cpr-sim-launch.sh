@@ -52,6 +52,7 @@ controller_recovery_loop() {
 }
 
 namespace="$(detect_namespace)"
+log_robot_yaml
 controller_recovery_loop "${namespace}" &
 
 # --- Gazebo launch with watchdog ---
