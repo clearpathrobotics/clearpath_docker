@@ -79,7 +79,7 @@ configuration from `clearpath_nav2_demos`:
 ```sh
 ros2 launch clearpath_nav2_demos nav2.launch.py \
   use_sim_time:=true \
-  setup_path:=/home/robot/setup/path/
+  setup_path:=/etc/clearpath
 ```
 
 The setup path must contain a `robot.yaml` that declares the platform serial
@@ -289,10 +289,10 @@ sudo systemctl restart docker
 xhost +local:
 
 # Sim + Viz
-ROS_DISTRO=jazzy docker compose -f compose-sim-viz.yaml -f compose.nvidia.yaml up
+SETUP_PATH_HOST=$HOME/clearpath ROS_DISTRO=jazzy docker compose -f compose-sim-viz.yaml -f compose.nvidia.yaml up
 
 # Sim + Nav2 + Viz
-ROS_DISTRO=jazzy docker compose -f compose-sim-viz-nav2.yaml -f compose.nvidia.yaml up
+SETUP_PATH_HOST=$HOME/clearpath ROS_DISTRO=jazzy docker compose -f compose-sim-viz-nav2.yaml -f compose.nvidia.yaml up
 ```
 
 ### Supported ROS 2 distros
@@ -510,13 +510,13 @@ using the sim image defaults. The Gazebo GUI will forward to your host display v
 ROS_DISTRO=jazzy docker compose up sim
 ```
 
-By default, `SETUP_PATH` inside the container is `/home/robot/setup/path/`, and
-that path is backed by `${HOME}/setup/path/` on the host. Override either side
+By default, `SETUP_PATH` inside the container is `/etc/clearpath`, and
+that path is backed by `${HOME}/clearpath/` on the host. Override either side
 as needed:
 
 ```sh
 SETUP_PATH_HOST=$HOME/my_setup_path \
-SETUP_PATH=/home/robot/setup/path/ \
+SETUP_PATH=/etc/clearpath \
 docker compose up sim
 ```
 
@@ -556,7 +556,7 @@ All variables can be passed on the command line or set in a `.env` file.
 | `ROBOT_DOCKERFILE` | `cpr-robot.Dockerfile` | robot | Dockerfile for the robot service; use `cpr-robot-humble.Dockerfile` for Humble |
 | `CLEARPATH_USER` | `robot` | robot | User that runs clearpath services (`administrator` for Humble) |
 | `SETUP_PATH_HOST` | `$HOME/clearpath/` | robot, sim, nav2, viz | **Host-side** path to the directory containing `robot.yaml`; mounted into the container at `SETUP_PATH` |
-| `SETUP_PATH` | `/home/robot/setup/path/` | sim, nav2, viz | **Container-side** mount point for the setup directory (the other end of `SETUP_PATH_HOST`) |
+| `SETUP_PATH` | `/etc/clearpath` | sim, nav2, viz | **Container-side** mount point for the setup directory (the other end of `SETUP_PATH_HOST`) |
 | `ROS2_WS` | `~/ros2_ws` | dev, dev-local | Host workspace path mounted into the container |
 | `USER_UID` | `1000` | dev-local | Host user UID — used to match file ownership in the mounted workspace |
 | `USER_GID` | `1000` | dev-local | Host user GID — used to match file ownership in the mounted workspace |

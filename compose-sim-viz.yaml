@@ -16,10 +16,10 @@ services:
     network_mode: host
     ipc: host
     environment:
-      SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
+      SETUP_PATH: ${SETUP_PATH:-/etc/clearpath}
       DISPLAY: ${DISPLAY:-:0}
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/robot/setup/path/
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/  # rw (default): sim generates URDF, SRDF, configs
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${HOME}/.Xauthority:/home/robot/.Xauthority:ro
     healthcheck:
@@ -47,14 +47,14 @@ services:
       - /dev/dri:/dev/dri
     ipc: host
     environment:
-      SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
+      SETUP_PATH: ${SETUP_PATH:-/etc/clearpath}
       DISPLAY: ${DISPLAY:-:0}
       ROBOT_NAMESPACE: ${ROBOT_NAMESPACE:-}
       USE_SIM_TIME: ${USE_SIM_TIME:-true}
       WAIT_FOR_TIMEOUT_SEC: ${WAIT_FOR_TIMEOUT_SEC:-120}
       CLEARPATH_VIZ_CONFIG: ${CLEARPATH_VIZ_CONFIG:-robot}
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/robot/setup/path/:ro
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/:ro  # ro: viz only reads config
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${HOME}/.Xauthority:/home/robot/.Xauthority:ro
     healthcheck:

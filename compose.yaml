@@ -14,8 +14,8 @@
 #   ROS_DISTRO  - humble | jazzy | lyrical | rolling (default: jazzy)
 #   ROS2_WS     - path to your ROS 2 workspace on the host (default: ~/ros2_ws)
 #   SETUP_PATH  - setup path passed to clearpath_gz simulation launch
-#                 (default in container: /home/robot/setup/path/)
-#   SETUP_PATH_HOST - host directory to mount into /home/robot/setup/path/
+#                 (default in container: /etc/clearpath)
+#   SETUP_PATH_HOST - host directory to mount into /etc/clearpath
 #                     (default: $HOME/clearpath/)
 #   USE_SIM_TIME - true/false for Nav2 demos in simulation (default: true)
 #   SCAN_TOPIC   - optional lidar topic override for 3D lidar setups
@@ -65,7 +65,7 @@ services:
     network_mode: host
     ipc: host
     environment:
-      SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
+      SETUP_PATH: ${SETUP_PATH:-/etc/clearpath}
       DISPLAY: ${DISPLAY:-:0}
       SIM_STARTUP_TIMEOUT_S: ${SIM_STARTUP_TIMEOUT_S:-120}
       GAZEBO_STARTUP_TIMEOUT: ${GAZEBO_STARTUP_TIMEOUT:-120}
@@ -75,7 +75,7 @@ services:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/robot/setup/path/
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/:rw  # rw: sim generates URDF, SRDF, configs
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${HOME}/.Xauthority:/home/robot/.Xauthority:ro
     healthcheck:
@@ -107,7 +107,7 @@ services:
     user: robot
     network_mode: host
     environment:
-      SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
+      SETUP_PATH: ${SETUP_PATH:-/etc/clearpath}
       ROBOT_NAMESPACE: ${ROBOT_NAMESPACE:-}
       USE_SIM_TIME: ${USE_SIM_TIME:-true}
       WAIT_FOR_SIM: ${WAIT_FOR_SIM:-false}
@@ -125,7 +125,7 @@ services:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/robot/setup/path/:ro
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/:ro  # ro: nav2 only reads config
     healthcheck:
       test:
         - "CMD"
@@ -154,7 +154,7 @@ services:
       - /dev/dri:/dev/dri
     ipc: host
     environment:
-      SETUP_PATH: ${SETUP_PATH:-/home/robot/setup/path/}
+      SETUP_PATH: ${SETUP_PATH:-/etc/clearpath}
       DISPLAY: ${DISPLAY:-:0}
       ROBOT_NAMESPACE: ${ROBOT_NAMESPACE:-}
       USE_SIM_TIME: ${USE_SIM_TIME:-true}
@@ -165,7 +165,7 @@ services:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/home/robot/setup/path/:ro
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/:ro  # ro: viz only reads config
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${HOME}/.Xauthority:/home/robot/.Xauthority:ro
     healthcheck:
@@ -199,7 +199,7 @@ services:
     cgroup: host
     environment:
       container: docker
-      SETUP_PATH: ${SETUP_PATH:-/etc/clearpath/}
+      SETUP_PATH: ${SETUP_PATH:-/etc/clearpath}
       ROS_DISTRO: ${ROS_DISTRO:-jazzy}
       # Humble robot firmware requires FastDDS — set RMW_IMPLEMENTATION=rmw_fastrtps_cpp when using ROS_DISTRO=humble.
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
@@ -207,7 +207,7 @@ services:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
-      - ${SETUP_PATH_HOST:?SETUP_PATH_HOST must be set to the directory containing robot.yaml}:/etc/clearpath/
+      - ${SETUP_PATH_HOST:?SETUP_PATH_HOST must be set to the directory containing robot.yaml}:/etc/clearpath/  # rw (default): robot may write logs/updates
       - /dev:/dev
       - /run/udev:/run/udev:ro
       - /sys/fs/cgroup:/sys/fs/cgroup:rw

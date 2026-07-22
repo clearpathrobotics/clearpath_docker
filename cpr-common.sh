@@ -3,15 +3,25 @@
 # Source this file before use:
 #   source "$(dirname "${BASH_SOURCE[0]}")/cpr-common.sh"
 
-# Default setup path; override by setting SETUP_PATH before sourcing.
-setup_path="${SETUP_PATH:-$HOME/setup/path/}"
+# Setup path must be provided via SETUP_PATH environment variable (typically set in docker-compose).
+# Strip any trailing slashes so path joins (e.g. ${setup_path}/robot.yaml) are clean.
+setup_path="${SETUP_PATH}"
+setup_path="${setup_path%/}"
 
 # log_robot_yaml [yaml_file]
 #
 # Prints the resolved path to robot.yaml and its contents to stderr.
 log_robot_yaml() {
   local yaml_file="${1:-${setup_path}/robot.yaml}"
-  echo "[cpr] robot.yaml path: ${yaml_file}" >&2
+  local host_path=""
+  
+  # If SETUP_PATH_HOST is set, show the host path for easier debugging
+  if [[ -n "${SETUP_PATH_HOST:-}" ]]; then
+    local rel_path="${yaml_file#${setup_path}/}"
+    host_path=" (host: ${SETUP_PATH_HOST}/${rel_path})"
+  fi
+  
+  echo "[cpr] robot.yaml path: ${yaml_file}${host_path}" >&2
   if [[ -f "${yaml_file}" ]]; then
     echo "[cpr] robot.yaml contents:" >&2
     cat "${yaml_file}" >&2
@@ -56,7 +66,7 @@ except Exception as e:
     print(f"Error parsing {path}: {e}", file=sys.stderr)
     raise SystemExit(0)
 
-# 1. platform.id  (e.g. "a200_0000")
+# 1. platform.id  (e.g. "a300_00000")
 ns = data.get('platform', {}).get('id', '')
 if ns:
     print(ns)
