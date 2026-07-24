@@ -52,11 +52,17 @@ RUN apt-get update \
 RUN useradd -m -s /bin/bash "${USERNAME}" && \
     echo "${USERNAME}" > /etc/clearpath_username
 
+# Setup robot user's bashrc with ROS and dev aliases
+RUN echo "if [ -f /opt/ros/${ROS_DISTRO}/setup.bash ]; then source /opt/ros/${ROS_DISTRO}/setup.bash; fi" >> /home/${USERNAME}/.bashrc \
+    && echo "source /usr/local/bin/cpr-dev.sh" >> /home/${USERNAME}/.bashrc \
+    && chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.bashrc
+
 # Setup directory for robot configuration
 RUN mkdir -p /etc/clearpath
 
 COPY cpr-common.sh /usr/local/bin/cpr-common.sh
-RUN chmod 0755 /usr/local/bin/cpr-common.sh
+COPY cpr-dev.sh /usr/local/bin/cpr-dev.sh
+RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-dev.sh
 
 # Install the entrypoint that validates robot.yaml and starts systemd
 COPY cpr-robot-entrypoint.sh /usr/local/bin/cpr-robot-entrypoint

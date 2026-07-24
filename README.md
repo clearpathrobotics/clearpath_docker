@@ -299,6 +299,43 @@ SETUP_PATH_HOST=$HOME/clearpath ROS_DISTRO=jazzy docker compose -f compose-sim-v
 
 `humble`, `jazzy`, `lyrical`, `rolling`.
 
+## Utility Scripts
+
+The images include utility scripts installed to `/usr/local/bin/`:
+
+### cpr-common.sh
+
+Common utilities and functions shared by Clearpath launch scripts. Includes:
+- `detect_namespace` - Auto-detect robot namespace from `robot.yaml`
+- `wait_for_sim_if_enabled` - Block until simulation is ready
+- `wait_for_service` / `wait_for_topic` - Wait for ROS 2 resources
+- `activate_node_direct` - Lifecycle node management
+- `log_robot_yaml` - Debug robot configuration
+
+Source this in scripts with:
+```bash
+source /usr/local/bin/cpr-common.sh
+```
+
+### cpr-dev.sh
+
+Development aliases and utilities automatically sourced in the `sim`, `nav2`, and `viz` images. Provides:
+
+**Build aliases:**
+- `cb` - Build workspace with symlink-install (RelWithDebInfo)
+- `cba <pkg>` - Build specific package
+- `cbu <pkg>` - Build package and dependencies
+- `cbp <pkg>` - Build package with verbose output
+- `ct` - Run tests
+- `ctr` - Show test results (verbose)
+- `cs` - Source workspace overlay
+
+**Helper functions:**
+- `cclean` - Remove build/install/log directories
+- `cpr-dev-help` - Show all available commands
+
+The script automatically sources `/colcon_ws/install/setup.bash` if it exists, making it ideal for devcontainer and volume-mounted workspace scenarios.
+
 ## Tags
 
 Tags are produced by the GitHub Actions workflow and follow this scheme:

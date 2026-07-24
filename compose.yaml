@@ -94,6 +94,26 @@ services:
     stdin_open: true
     tty: true
 
+  # Opt-in: rebuild the sim image locally with the host user's uid/gid so
+  # files created in the mounted SETUP_PATH are owned by you (instead of
+  # uid 1000). Use this if your host user is not uid/gid 1000.
+  #
+  #   SETUP_PATH_HOST=~/clearpath docker compose up sim-local
+  sim-local:
+    extends:
+      service: sim
+    image: cpr-sim:${ROS_DISTRO:-jazzy}-local
+    container_name: cpr-sim-${ROS_DISTRO:-jazzy}-local
+    build:
+      context: .
+      dockerfile: cpr-sim-local.Dockerfile
+      args:
+        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+        CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
+        CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-sim-latest
+        USER_UID: ${USER_UID:-1000}
+        USER_GID: ${USER_GID:-1000}
+
   nav2:
     image: cpr-nav2:${ROS_DISTRO:-jazzy}-local
     container_name: cpr-nav2-${ROS_DISTRO:-jazzy}
@@ -232,3 +252,23 @@ services:
       start_period: 60s
     stdin_open: true
     tty: true
+
+  # Opt-in: rebuild the robot image locally with the host user's uid/gid so
+  # files created in the mounted SETUP_PATH are owned by you (instead of
+  # uid 1000). Use this if your host user is not uid/gid 1000.
+  #
+  #   SETUP_PATH_HOST=/etc/clearpath docker compose up robot-local
+  robot-local:
+    extends:
+      service: robot
+    image: cpr-robot:${ROS_DISTRO:-jazzy}-local
+    container_name: cpr-robot-${ROS_DISTRO:-jazzy}-local
+    build:
+      context: .
+      dockerfile: cpr-robot-local.Dockerfile
+      args:
+        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+        CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
+        CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-robot-latest
+        USER_UID: ${USER_UID:-1000}
+        USER_GID: ${USER_GID:-1000}

@@ -20,6 +20,9 @@ RUN apt-get update && apt-get install -y \
   && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/*
 
+COPY cpr-dev.sh /usr/local/bin/cpr-dev.sh
+RUN chmod 0755 /usr/local/bin/cpr-dev.sh
+
 ARG USERNAME=robot
 ARG USER_UID=1000
 ARG USER_GID=$USER_UID
@@ -33,7 +36,8 @@ RUN groupadd --gid $USER_GID $USERNAME \
   && chmod 0440 /etc/sudoers.d/$USERNAME \
   && rm -rf /var/lib/apt/lists/* \
   && echo "source /usr/share/bash-completion/completions/git" >> /home/$USERNAME/.bashrc \
-  && echo "if [ -f /opt/ros/${ROS_DISTRO}/setup.bash ]; then source /opt/ros/${ROS_DISTRO}/setup.bash; fi" >> /home/$USERNAME/.bashrc
+  && echo "if [ -f /opt/ros/${ROS_DISTRO}/setup.bash ]; then source /opt/ros/${ROS_DISTRO}/setup.bash; fi" >> /home/$USERNAME/.bashrc \
+  && echo "source /usr/local/bin/cpr-dev.sh" >> /home/$USERNAME/.bashrc
 
 # Persist bash history via a mountable volume
 RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
@@ -41,5 +45,9 @@ RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhisto
     && touch /commandhistory/.bash_history \
     && chown -R $USERNAME /commandhistory \
     && echo "$SNIPPET" >> "/home/$USERNAME/.bashrc"
+
+# Create colcon workspace directory with correct ownership
+RUN mkdir -p /colcon_ws/src \
+    && chown -R $USERNAME:$USERNAME /colcon_ws
 
 ENV DEBIAN_FRONTEND=

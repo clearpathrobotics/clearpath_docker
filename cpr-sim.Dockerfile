@@ -14,8 +14,9 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY cpr-common.sh /usr/local/bin/cpr-common.sh
+COPY cpr-dev.sh /usr/local/bin/cpr-dev.sh
 COPY cpr-sim-launch.sh /usr/local/bin/cpr-sim-launch
-RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-sim-launch
+RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-dev.sh /usr/local/bin/cpr-sim-launch
 
 # Healthcheck: passes once the Gazebo→ROS clock bridge is publishing /clock
 # and the robot's odometry topic is available.
