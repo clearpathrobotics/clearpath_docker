@@ -18,6 +18,7 @@ services:
     environment:
       SETUP_PATH: ${SETUP_PATH:-/etc/clearpath}
       DISPLAY: ${DISPLAY:-:0}
+      GAZEBO_HEADLESS: ${GAZEBO_HEADLESS:-false}
     volumes:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/  # rw (default): sim generates URDF, SRDF, configs
       - /tmp/.X11-unix:/tmp/.X11-unix:rw

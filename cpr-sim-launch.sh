@@ -4,9 +4,9 @@ set -euo pipefail
 # shellcheck source=cpr-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/cpr-common.sh"
 
-startup_timeout_s="${SIM_STARTUP_TIMEOUT_S:-120}"
 gazebo_startup_timeout="${GAZEBO_STARTUP_TIMEOUT:-120}"
 max_restarts="${GAZEBO_MAX_RESTARTS:-3}"
+headless="${GAZEBO_HEADLESS:-false}"
 
 # --- Controller recovery (background loop) ---
 # Continuously ensures joint_state_broadcaster and platform_velocity_controller
@@ -62,7 +62,7 @@ restart_count=0
 while true; do
 	echo "[cpr-sim-launch] Starting Gazebo (attempt $((restart_count + 1))/$((max_restarts + 1)))" >&2
 
-	ros2 launch clearpath_gz simulation.launch.py "setup_path:=${setup_path}" "$@" &
+	ros2 launch clearpath_gz simulation.launch.py "setup_path:=${setup_path}" "headless:=${headless}" "$@" &
 	gz_pid=$!
 
 	# Wait for /clock to appear
