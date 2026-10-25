@@ -600,7 +600,7 @@ All variables can be passed on the command line or set in a `.env` file.
 | `RMW_IMPLEMENTATION` | `rmw_cyclonedds_cpp` | sim, nav2, viz, robot | ROS 2 middleware — Humble robot containers must use `rmw_fastrtps_cpp` (firmware requirement) |
 | `ROS_AUTOMATIC_DISCOVERY_RANGE` | `LOCALHOST` | sim, nav2, viz | DDS participant discovery scope |
 | `ROS_DOMAIN_ID` | `0` | sim, nav2, viz, robot | ROS domain ID |
-| `CYCLONEDDS_URI` | (inline XML) | sim, nav2, viz, robot | CycloneDDS configuration XML |
+| `CYCLONEDDS_URI` | (inline XML) | sim, nav2, viz, robot | CycloneDDS configuration XML. The default sets `ParticipantIndex` to `auto` with `MaxAutoParticipantIndex` 120, which `LOCALHOST` discovery needs for more than 32 ROS processes. Host-side ROS processes, such as the `ros2` CLI, must use the same setting to discover the containers. |
 | `DISPLAY` | `:0` | sim, viz | X11 display target |
 | `USE_SIM_TIME` | `true` | nav2, viz | Use `/clock` from Gazebo instead of wall time |
 | `CLEARPATH_VIZ_CONFIG` | `robot` | viz | RViz config profile (`robot` or `navigation`) |

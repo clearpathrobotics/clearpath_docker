@@ -24,7 +24,7 @@ HEALTHCHECK --interval=10s --timeout=10s --start-period=120s --retries=24 \
   CMD bash -c '\
     source /opt/ros/${ROS_DISTRO}/setup.bash && \
     if [[ "${RMW_IMPLEMENTATION:-}" == "rmw_cyclonedds_cpp" ]]; then \
-      export CYCLONEDDS_URI="<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>"; \
+      export CYCLONEDDS_URI="${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>120</MaxAutoParticipantIndex></Discovery></Domain></CycloneDDS>}"; \
     fi && \
     ros2 node list --no-daemon 2>/dev/null | grep -qE "/[^/]+/bt_navigator$" && \
     ( [[ "${NAV2_ENABLE_SLAM:-false}" != "true" ]] || ros2 node list --no-daemon 2>/dev/null | grep -qE "slam_toolbox" )'
