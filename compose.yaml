@@ -73,7 +73,7 @@ services:
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
+      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>120</MaxAutoParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/:rw  # rw: sim generates URDF, SRDF, configs
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -143,7 +143,7 @@ services:
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
+      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>120</MaxAutoParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/:ro  # ro: nav2 only reads config
     healthcheck:
@@ -183,7 +183,7 @@ services:
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
+      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>120</MaxAutoParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/:ro  # ro: viz only reads config
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -225,7 +225,7 @@ services:
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>}'
+      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>120</MaxAutoParticipantIndex></Discovery></Domain></CycloneDDS>}'
     volumes:
       - ${SETUP_PATH_HOST:?SETUP_PATH_HOST must be set to the directory containing robot.yaml}:/etc/clearpath/  # rw (default): robot may write logs/updates
       - /dev:/dev

@@ -26,7 +26,7 @@ HEALTHCHECK --interval=10s --timeout=15s --start-period=120s --retries=24 \
   CMD bash -c '\
     source /opt/ros/${ROS_DISTRO}/setup.bash && \
     if [[ "${RMW_IMPLEMENTATION:-}" == "rmw_cyclonedds_cpp" ]]; then \
-      export CYCLONEDDS_URI="<CycloneDDS><Domain><Discovery><ParticipantIndex>none</ParticipantIndex></Discovery></Domain></CycloneDDS>"; \
+      export CYCLONEDDS_URI="${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>120</MaxAutoParticipantIndex></Discovery></Domain></CycloneDDS>}"; \
     fi && \
     timeout 8 ros2 topic echo /clock --once >/dev/null 2>&1 && \
     ros2 topic list --no-daemon 2>/dev/null | grep -qE "/[^/]+/platform/odom/filtered$"'
