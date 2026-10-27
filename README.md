@@ -15,7 +15,7 @@ CI image; the sim image is built `FROM` the dev image.
 
 Headless server-side image — no GUI tooling. `ros:<distro>-ros-base`
 extended with the Clearpath public rosdistro index and the Clearpath apt
-source (when available for the Ubuntu codename). Slim, no extra tooling,
+source (when available for the Ubuntu codename; amd64 only). Slim, no extra tooling,
 no non-root user — suitable as a runtime base for robots and as the parent
 for the dev and CI images.
 
@@ -298,6 +298,20 @@ SETUP_PATH_HOST=$HOME/clearpath ROS_DISTRO=jazzy docker compose -f compose-sim-v
 ### Supported ROS 2 distros
 
 `humble`, `jazzy`, `lyrical`, `rolling`.
+
+### Supported architectures
+
+| Image | amd64 | arm64 |
+| --- | --- | --- |
+| base | yes | yes |
+| dev | yes | yes |
+| ci, ci-common, ci-robot | yes | no |
+| sim, nav2, viz, foxglove-bridge | yes | no |
+| robot | yes | no |
+
+Multi-arch tags resolve to the host architecture automatically. The arm64
+base image does not add the Clearpath apt source, which has no arm64 Clearpath
+packages; `ros-<distro>-clearpath-robot` is not published for arm64 at all.
 
 ## Utility Scripts
 
@@ -680,6 +694,11 @@ pushes to `main`, on version tags (`v*`), on pull requests, and nightly at
 produced for the same ref; the common and robot (CI and runtime) builds wait
 for the CI and base builds respectively and reuse their tags; the sim build
 waits for the dev build and reuses its tag.
+
+The base and dev images are built natively on `ubuntu-latest` (amd64) and
+`ubuntu-24.04-arm` (arm64) runners, pushed by digest, and merged into a single
+multi-arch tag by the `build-merge` and `dev-merge` jobs. Downstream images
+wait for the merge jobs.
 
 ## License
 
