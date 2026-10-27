@@ -39,8 +39,11 @@ RUN mkdir -p /etc/apt/keyrings \
 # Only add the Clearpath apt source if the stable repo exists for this Ubuntu codename.
 # Newer Ubuntu releases (e.g. resolute) may not yet be published in the stable repo,
 # which would otherwise cause `apt-get update` to fail with a 404.
+# The stable repo does not publish Clearpath packages for arm64.
 RUN UBUNTU_CODENAME="$(lsb_release -cs)" \
-  && if curl -fsSL --retry 5 --retry-delay 5 -o /dev/null "https://packages.clearpathrobotics.com/stable/ubuntu/dists/${UBUNTU_CODENAME}/Release"; then \
+  && if [ "$(dpkg --print-architecture)" != "amd64" ]; then \
+       echo "Clearpath stable repo has no packages for $(dpkg --print-architecture); skipping apt source."; \
+     elif curl -fsSL --retry 5 --retry-delay 5 -o /dev/null "https://packages.clearpathrobotics.com/stable/ubuntu/dists/${UBUNTU_CODENAME}/Release"; then \
        echo "deb [signed-by=/etc/apt/keyrings/clearpathrobotics.gpg] https://packages.clearpathrobotics.com/stable/ubuntu ${UBUNTU_CODENAME} main" \
          > /etc/apt/sources.list.d/clearpath-latest.list; \
      else \
