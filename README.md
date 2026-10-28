@@ -578,6 +578,12 @@ to override:
 DISPLAY=:1 docker compose up sim
 ```
 
+To run Gazebo headless (server only, no GUI or X11 required):
+
+```sh
+GAZEBO_HEADLESS=true docker compose up sim
+```
+
 **Important**: The setup path must be writable by the container. If using a custom path,
 grant write permission first:
 
@@ -630,9 +636,9 @@ All variables can be passed on the command line or set in a `.env` file.
 | `NAV2_SERVICE_CALL_TIMEOUT_S` | `8` | nav2 | Per-call timeout for lifecycle service calls |
 | `NAV2_ACTIVE_WAIT_TIMEOUT_S` | `60` | nav2 | Seconds to wait for all navigation nodes to reach active state |
 | `NAV2_TOPIC_WAIT_TIMEOUT_S` | `120` | nav2 | Seconds to wait for odom/TF topics before Nav2 bringup |
-| `SIM_STARTUP_TIMEOUT_S` | `120` | sim | Seconds to wait for the simulation stack to become ready |
 | `GAZEBO_STARTUP_TIMEOUT` | `120` | sim | Seconds to wait for the Gazebo process to start |
 | `GAZEBO_MAX_RESTARTS` | `3` | sim | Max times the Gazebo watchdog will restart Gazebo on failure |
+| `GAZEBO_HEADLESS` | `false` | sim | Run Gazebo server only (no GUI, headless rendering); no X11 needed |
 | `FOXGLOVE_BRIDGE_PORT` | `8765` | foxglove-bridge | WebSocket port for `foxglove_bridge` |
 
 #### Matching your host uid/gid (non-1000 users)
