@@ -1,5 +1,5 @@
-# Compose file for running sim, nav2, and viz containers together.
-# These containers communicate via ROS 2 using host network.
+# Preset for running sim, nav2 (with SLAM), and viz (navigation view) together.
+# Services come from compose.yaml; only the nav demo defaults differ.
 #
 # Usage:
 #   xhost +local:
@@ -7,132 +7,24 @@
 
 services:
   sim:
-    image: cpr-sim:${ROS_DISTRO:-jazzy}-local
-    container_name: cpr-sim-nav2-${ROS_DISTRO:-jazzy}
-    build:
-      context: .
-      dockerfile: docker/cpr-sim.Dockerfile
-      args:
-        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
-        CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
-        CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-dev-latest
-    user: robot
-    network_mode: host
-    ipc: host
-    environment:
-      SETUP_PATH: ${SETUP_PATH:-/etc/clearpath}
-      DISPLAY: ${DISPLAY:-:0}
-      GAZEBO_STARTUP_TIMEOUT: ${GAZEBO_STARTUP_TIMEOUT:-120}
-      GAZEBO_MAX_RESTARTS: ${GAZEBO_MAX_RESTARTS:-3}
-      GAZEBO_HEADLESS: ${GAZEBO_HEADLESS:-false}
-      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
-      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
-      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>120</MaxAutoParticipantIndex></Discovery></Domain></CycloneDDS>}'
-    volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/  # rw (default): sim generates URDF, SRDF, configs
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ${HOME}/.Xauthority:/home/robot/.Xauthority:ro
-      - gz_fuel_cache:/home/robot/.gz/fuel
-    stdin_open: true
-    tty: true
+    extends:
+      file: compose.yaml
+      service: sim
+    profiles: !reset []
 
   nav2:
-    image: cpr-nav2:${ROS_DISTRO:-jazzy}-local
-    container_name: cpr-nav2-stack-${ROS_DISTRO:-jazzy}
-    build:
-      context: .
-      dockerfile: docker/cpr-nav2.Dockerfile
-      args:
-        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
-        CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
-        CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-dev-latest
-    user: robot
-    network_mode: host
+    extends:
+      file: compose.yaml
+      service: nav2
     environment:
-      SETUP_PATH: ${SETUP_PATH:-/etc/clearpath}
-      ROBOT_NAMESPACE: ${ROBOT_NAMESPACE:-}
-      USE_SIM_TIME: ${USE_SIM_TIME:-true}
-      WAIT_FOR_SIM: ${WAIT_FOR_SIM:-false}
-      WAIT_FOR_TIMEOUT_SEC: ${WAIT_FOR_TIMEOUT_SEC:-120}
-      SCAN_TOPIC: ${SCAN_TOPIC:-}
-      NAV2_LAUNCH_FILE: ${NAV2_LAUNCH_FILE:-nav2.launch.py}
       NAV2_ENABLE_SLAM: ${NAV2_ENABLE_SLAM:-true}
-      NAV2_SLAM_SYNC: ${NAV2_SLAM_SYNC:-false}
-      NAV2_STARTUP_TIMEOUT_S: ${NAV2_STARTUP_TIMEOUT_S:-120}
-      NAV2_SERVICE_CALL_TIMEOUT_S: ${NAV2_SERVICE_CALL_TIMEOUT_S:-8}
-      NAV2_ACTIVE_WAIT_TIMEOUT_S: ${NAV2_ACTIVE_WAIT_TIMEOUT_S:-60}
-      NAV2_TOPIC_WAIT_TIMEOUT_S: ${NAV2_TOPIC_WAIT_TIMEOUT_S:-120}
-      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
-      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
-      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>120</MaxAutoParticipantIndex></Discovery></Domain></CycloneDDS>}'
-    volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/:ro  # ro: nav2 only reads config
-    healthcheck:
-      test:
-        - "CMD"
-        - "bash"
-        - "-c"
-        - >-
-          source /opt/ros/${ROS_DISTRO:-jazzy}/setup.bash &&
-          ros2 node list --no-daemon 2>/dev/null | grep -qE '/[^/]+/bt_navigator$' &&
-          ros2 action list --no-daemon 2>/dev/null | grep -qE '/[^/]+/navigate_to_pose$'
-      interval: 10s
-      timeout: 10s
-      retries: 24
-      start_period: 150s
-    stdin_open: true
-    tty: true
-    depends_on:
-      sim:
-        condition: service_healthy
 
   viz:
-    image: cpr-viz:${ROS_DISTRO:-jazzy}-local
-    container_name: cpr-viz-nav2-${ROS_DISTRO:-jazzy}
-    build:
-      context: .
-      dockerfile: docker/cpr-viz.Dockerfile
-      args:
-        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
-        CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
-        CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-dev-latest
-    user: robot
-    network_mode: host
-    devices:
-      - /dev/dri:/dev/dri
-    ipc: host
+    extends:
+      file: compose.yaml
+      service: viz
     environment:
-      SETUP_PATH: ${SETUP_PATH:-/etc/clearpath}
-      DISPLAY: ${DISPLAY:-:0}
-      ROBOT_NAMESPACE: ${ROBOT_NAMESPACE:-}
-      USE_SIM_TIME: ${USE_SIM_TIME:-true}
-      WAIT_FOR_TIMEOUT_SEC: ${WAIT_FOR_TIMEOUT_SEC:-120}
       CLEARPATH_VIZ_CONFIG: ${CLEARPATH_VIZ_CONFIG:-navigation}
-      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
-      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
-      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>120</MaxAutoParticipantIndex></Discovery></Domain></CycloneDDS>}'
-    volumes:
-      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/:ro  # ro: viz only reads config
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ${HOME}/.Xauthority:/home/robot/.Xauthority:ro
-    healthcheck:
-      test:
-        - "CMD"
-        - "bash"
-        - "-c"
-        - "pgrep -f rviz2 >/dev/null"
-      interval: 10s
-      timeout: 10s
-      retries: 24
-      start_period: 60s
-    stdin_open: true
-    tty: true
-    depends_on:
-      sim:
-        condition: service_healthy
 
 volumes:
   gz_fuel_cache:
