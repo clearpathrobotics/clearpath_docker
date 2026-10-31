@@ -1,0 +1,188 @@
+name: Build image
+
+on:
+  workflow_call:
+    inputs:
+      variant:
+        description: Image variant used in the tag (`base` has no tag infix)
+        required: true
+        type: string
+      parent:
+        description: Variant of the parent image passed as CPR_BASE_IMAGE/CPR_BASE_TAG; empty for none
+        required: false
+        type: string
+        default: ''
+      dockerfile:
+        required: true
+        type: string
+      distros:
+        description: JSON array of ROS 2 distros
+        required: true
+        type: string
+      multiarch:
+        description: Build amd64 and arm64 natively and merge into one manifest
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        ros_distro: ${{ fromJSON(inputs.distros) }}
+        arch: ${{ fromJSON(inputs.multiarch && '["amd64", "arm64"]' || '["amd64"]') }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tag prefixes
+        id: prefix
+        env:
+          DISTRO: ${{ matrix.ros_distro }}
+          VARIANT: ${{ inputs.variant }}
+          PARENT: ${{ inputs.parent }}
+        run: |
+          tag_prefix() { if [[ "$1" == base ]]; then echo "${DISTRO}-"; else echo "${DISTRO}-$1-"; fi; }
+          echo "image=$(tag_prefix "$VARIANT")" >> "$GITHUB_OUTPUT"
+          if [[ -n "$PARENT" ]]; then echo "parent=$(tag_prefix "$PARENT")" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Extract parent image metadata (to derive CPR_BASE_TAG)
+        id: parent_meta
+        if: inputs.parent != ''
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          flavor: |
+            prefix=${{ steps.prefix.outputs.parent }},onlatest=true
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=pr,prefix=${{ steps.prefix.outputs.parent }}pr-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=schedule,pattern=nightly
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          flavor: |
+            prefix=${{ steps.prefix.outputs.image }},onlatest=true
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=pr,prefix=${{ steps.prefix.outputs.image }}pr-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=schedule,pattern=nightly
+
+      # Multi-arch builds push by digest; the merge job tags the combined manifest.
+      - name: Build and push ${{ inputs.variant }} image
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ inputs.dockerfile }}
+          platforms: linux/${{ matrix.arch }}
+          build-args: |
+            ROS_DISTRO=${{ matrix.ros_distro }}
+            ${{ inputs.parent != '' && format('CPR_BASE_IMAGE=ghcr.io/{0}', github.repository) || '' }}
+            ${{ inputs.parent != '' && format('CPR_BASE_TAG={0}', steps.parent_meta.outputs.version) || '' }}
+          labels: ${{ steps.meta.outputs.labels }}
+          push: ${{ !inputs.multiarch }}
+          tags: ${{ !inputs.multiarch && steps.meta.outputs.tags || '' }}
+          outputs: ${{ inputs.multiarch && format('type=image,name=ghcr.io/{0},push-by-digest=true,name-canonical=true,push=true', github.repository) || '' }}
+
+      - name: Export digest
+        if: inputs.multiarch
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: inputs.multiarch
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.variant }}-digests-${{ matrix.ros_distro }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    if: inputs.multiarch
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ros_distro: ${{ fromJSON(inputs.distros) }}
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: ${{ inputs.variant }}-digests-${{ matrix.ros_distro }}-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tag prefix
+        id: prefix
+        env:
+          DISTRO: ${{ matrix.ros_distro }}
+          VARIANT: ${{ inputs.variant }}
+        run: |
+          if [[ "$VARIANT" == base ]]; then echo "image=${DISTRO}-"; else echo "image=${DISTRO}-${VARIANT}-"; fi >> "$GITHUB_OUTPUT"
+
+      - name: Extract metadata (tags)
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          flavor: |
+            prefix=${{ steps.prefix.outputs.image }},onlatest=true
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=ref,event=pr,prefix=${{ steps.prefix.outputs.image }}pr-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=schedule,pattern=nightly
+
+      - name: Create and push multi-arch manifest
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)

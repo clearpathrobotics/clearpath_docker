@@ -19,805 +19,101 @@ permissions:
   packages: write
 
 jobs:
-  build:
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        ros_distro: [humble, jazzy, lyrical, rolling]
-        arch: [amd64, arm64]
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-          - arch: arm64
-            runner: ubuntu-24.04-arm
+  base:
+    uses: ./.github/workflows/build-image.yml
+    with:
+      variant: base
+      dockerfile: docker/cpr-base.Dockerfile
+      distros: '["humble", "jazzy", "lyrical", "rolling"]'
+      multiarch: true
 
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v7
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Build and push base image by digest
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./docker/cpr-base.Dockerfile
-          platforms: linux/${{ matrix.arch }}
-          build-args: |
-            ROS_DISTRO=${{ matrix.ros_distro }}
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
-
-      - name: Export digest
-        run: |
-          mkdir -p "${{ runner.temp }}/digests"
-          digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/digests/${digest#sha256:}"
-
-      - name: Upload digest
-        uses: actions/upload-artifact@v4
-        with:
-          name: base-digests-${{ matrix.ros_distro }}-${{ matrix.arch }}
-          path: ${{ runner.temp }}/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
-  build-merge:
-    needs: build
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        ros_distro: [humble, jazzy, lyrical, rolling]
-
-    steps:
-      - name: Download digests
-        uses: actions/download-artifact@v4
-        with:
-          path: ${{ runner.temp }}/digests
-          pattern: base-digests-${{ matrix.ros_distro }}-*
-          merge-multiple: true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata (tags)
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Create and push multi-arch manifest
-        working-directory: ${{ runner.temp }}/digests
-        run: |
-          docker buildx imagetools create \
-            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
+  dev:
+    needs: base
+    uses: ./.github/workflows/build-image.yml
+    with:
+      variant: dev
+      parent: base
+      dockerfile: docker/cpr-dev.Dockerfile
+      distros: '["humble", "jazzy", "lyrical", "rolling"]'
+      multiarch: true
 
   ci:
-    needs: build-merge
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        ros_distro: [humble, jazzy, lyrical, rolling]
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v7
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract base image metadata (to derive CPR_BASE_TAG)
-        id: base_meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-ci-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-ci-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Build and push CI image (amd64 only)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./docker/cpr-ci.Dockerfile
-          push: true
-          platforms: linux/amd64
-          build-args: |
-            ROS_DISTRO=${{ matrix.ros_distro }}
-            CPR_BASE_IMAGE=ghcr.io/${{ github.repository }}
-            CPR_BASE_TAG=${{ steps.base_meta.outputs.version }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+    needs: base
+    uses: ./.github/workflows/build-image.yml
+    with:
+      variant: ci
+      parent: base
+      dockerfile: docker/cpr-ci.Dockerfile
+      distros: '["humble", "jazzy", "lyrical", "rolling"]'
 
   ci-common:
     needs: ci
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        ros_distro: [humble, jazzy]
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v7
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract CI image metadata (to derive CPR_BASE_TAG)
-        id: base_meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-ci-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-ci-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-ci-common-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-ci-common-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Build and push ci-common image (amd64 only)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./docker/cpr-ci-common.Dockerfile
-          push: true
-          platforms: linux/amd64
-          build-args: |
-            ROS_DISTRO=${{ matrix.ros_distro }}
-            CPR_BASE_IMAGE=ghcr.io/${{ github.repository }}
-            CPR_BASE_TAG=${{ steps.base_meta.outputs.version }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+    uses: ./.github/workflows/build-image.yml
+    with:
+      variant: ci-common
+      parent: ci
+      dockerfile: docker/cpr-ci-common.Dockerfile
+      distros: '["humble", "jazzy"]'
 
   ci-robot:
     needs: ci
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        ros_distro: [humble, jazzy]
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v7
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract CI image metadata (to derive CPR_BASE_TAG)
-        id: base_meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-ci-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-ci-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-ci-robot-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-ci-robot-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Build and push ci-robot image (amd64 only)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./docker/cpr-ci-robot.Dockerfile
-          push: true
-          platforms: linux/amd64
-          build-args: |
-            ROS_DISTRO=${{ matrix.ros_distro }}
-            CPR_BASE_IMAGE=ghcr.io/${{ github.repository }}
-            CPR_BASE_TAG=${{ steps.base_meta.outputs.version }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+    uses: ./.github/workflows/build-image.yml
+    with:
+      variant: ci-robot
+      parent: ci
+      dockerfile: docker/cpr-ci-robot.Dockerfile
+      distros: '["humble", "jazzy"]'
 
   robot:
-    needs: build-merge
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - ros_distro: jazzy
-            dockerfile: docker/cpr-robot.Dockerfile
-          - ros_distro: humble
-            dockerfile: docker/cpr-robot-humble.Dockerfile
+    needs: base
+    uses: ./.github/workflows/build-image.yml
+    with:
+      variant: robot
+      parent: base
+      dockerfile: docker/cpr-robot.Dockerfile
+      distros: '["jazzy"]'
 
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v7
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract base image metadata (to derive CPR_BASE_TAG)
-        id: base_meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-robot-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-robot-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Build and push robot image (amd64 only)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./${{ matrix.dockerfile }}
-          push: true
-          platforms: linux/amd64
-          build-args: |
-            ROS_DISTRO=${{ matrix.ros_distro }}
-            CPR_BASE_IMAGE=ghcr.io/${{ github.repository }}
-            CPR_BASE_TAG=${{ steps.base_meta.outputs.version }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+  robot-humble:
+    needs: base
+    uses: ./.github/workflows/build-image.yml
+    with:
+      variant: robot
+      parent: base
+      dockerfile: docker/cpr-robot-humble.Dockerfile
+      distros: '["humble"]'
 
   sim:
-    needs: dev-merge
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        ros_distro: [humble, jazzy]
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v7
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract dev image metadata (to derive CPR_BASE_TAG)
-        id: base_meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-dev-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-dev-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-sim-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-sim-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Build and push sim image (amd64 only)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./docker/cpr-sim.Dockerfile
-          push: true
-          platforms: linux/amd64
-          build-args: |
-            ROS_DISTRO=${{ matrix.ros_distro }}
-            CPR_BASE_IMAGE=ghcr.io/${{ github.repository }}
-            CPR_BASE_TAG=${{ steps.base_meta.outputs.version }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-  dev:
-    needs: build-merge
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        ros_distro: [humble, jazzy, lyrical, rolling]
-        arch: [amd64, arm64]
-        include:
-          - arch: amd64
-            runner: ubuntu-latest
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v7
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract base image metadata (to derive CPR_BASE_TAG)
-        id: base_meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-dev-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-dev-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Build and push dev image by digest
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./docker/cpr-dev.Dockerfile
-          platforms: linux/${{ matrix.arch }}
-          build-args: |
-            ROS_DISTRO=${{ matrix.ros_distro }}
-            CPR_BASE_IMAGE=ghcr.io/${{ github.repository }}
-            CPR_BASE_TAG=${{ steps.base_meta.outputs.version }}
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true,push=true
-
-      - name: Export digest
-        run: |
-          mkdir -p "${{ runner.temp }}/digests"
-          digest="${{ steps.build.outputs.digest }}"
-          touch "${{ runner.temp }}/digests/${digest#sha256:}"
-
-      - name: Upload digest
-        uses: actions/upload-artifact@v4
-        with:
-          name: dev-digests-${{ matrix.ros_distro }}-${{ matrix.arch }}
-          path: ${{ runner.temp }}/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
-  dev-merge:
     needs: dev
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        ros_distro: [humble, jazzy, lyrical, rolling]
-
-    steps:
-      - name: Download digests
-        uses: actions/download-artifact@v4
-        with:
-          path: ${{ runner.temp }}/digests
-          pattern: dev-digests-${{ matrix.ros_distro }}-*
-          merge-multiple: true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata (tags)
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-dev-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-dev-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Create and push multi-arch manifest
-        working-directory: ${{ runner.temp }}/digests
-        run: |
-          docker buildx imagetools create \
-            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
+    uses: ./.github/workflows/build-image.yml
+    with:
+      variant: sim
+      parent: dev
+      dockerfile: docker/cpr-sim.Dockerfile
+      distros: '["humble", "jazzy"]'
 
   nav2:
-    needs: dev-merge
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        ros_distro: [humble, jazzy]
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v7
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract dev image metadata (to derive CPR_BASE_TAG)
-        id: base_meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-dev-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-dev-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-nav2-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-nav2-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Build and push nav2 image (amd64 only)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./docker/cpr-nav2.Dockerfile
-          push: true
-          platforms: linux/amd64
-          build-args: |
-            ROS_DISTRO=${{ matrix.ros_distro }}
-            CPR_BASE_IMAGE=ghcr.io/${{ github.repository }}
-            CPR_BASE_TAG=${{ steps.base_meta.outputs.version }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-  foxglove-bridge:
-    needs: build-merge
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        ros_distro: [humble, jazzy]
-
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v7
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract base image metadata (to derive CPR_BASE_TAG)
-        id: base_meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-foxglove-bridge-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-foxglove-bridge-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Build and push foxglove-bridge image (amd64 only)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./docker/cpr-foxglove-bridge.Dockerfile
-          push: true
-          platforms: linux/amd64
-          build-args: |
-            ROS_DISTRO=${{ matrix.ros_distro }}
-            CPR_BASE_IMAGE=ghcr.io/${{ github.repository }}
-            CPR_BASE_TAG=${{ steps.base_meta.outputs.version }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+    needs: dev
+    uses: ./.github/workflows/build-image.yml
+    with:
+      variant: nav2
+      parent: dev
+      dockerfile: docker/cpr-nav2.Dockerfile
+      distros: '["humble", "jazzy"]'
 
   viz:
-    needs: dev-merge
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        ros_distro: [humble, jazzy]
+    needs: dev
+    uses: ./.github/workflows/build-image.yml
+    with:
+      variant: viz
+      parent: dev
+      dockerfile: docker/cpr-viz.Dockerfile
+      distros: '["humble", "jazzy"]'
 
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v7
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract dev image metadata (to derive CPR_BASE_TAG)
-        id: base_meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-dev-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-dev-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          flavor: |
-            prefix=${{ matrix.ros_distro }}-viz-,onlatest=true
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=pr,prefix=${{ matrix.ros_distro }}-viz-pr-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=schedule,pattern=nightly
-
-      - name: Build and push viz image (amd64 only)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./docker/cpr-viz.Dockerfile
-          push: true
-          platforms: linux/amd64
-          build-args: |
-            ROS_DISTRO=${{ matrix.ros_distro }}
-            CPR_BASE_IMAGE=ghcr.io/${{ github.repository }}
-            CPR_BASE_TAG=${{ steps.base_meta.outputs.version }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+  foxglove-bridge:
+    needs: base
+    uses: ./.github/workflows/build-image.yml
+    with:
+      variant: foxglove-bridge
+      parent: base
+      dockerfile: docker/cpr-foxglove-bridge.Dockerfile
+      distros: '["humble", "jazzy"]'
