@@ -1,0 +1,54 @@
+name: Config check
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ros_distro: [humble, jazzy]
+        files:
+          - compose.yaml
+          - compose.yaml compose.nvidia.yaml
+          - compose.yaml compose.override.yaml.example
+          - compose-sim-viz-nav2.yaml
+          - compose-sim-viz-nav2.yaml compose.nvidia.yaml
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Validate ${{ matrix.files }}
+        env:
+          ROS_DISTRO: ${{ matrix.ros_distro }}
+          FILES: ${{ matrix.files }}
+        run: |
+          args=()
+          for f in $FILES; do args+=(-f "$f"); done
+          docker compose "${args[@]}" --profile '*' config -q
+
+  bake:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Validate docker-bake.hcl
+        # -f keeps bake from also loading compose.yaml as targets
+        run: |
+          docker buildx bake -f docker-bake.hcl --print \
+            base dev ci ci-common ci-robot robot sim nav2 viz foxglove-bridge > /dev/null
