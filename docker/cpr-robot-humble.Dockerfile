@@ -39,6 +39,7 @@ RUN apt-get update \
     ros-humble-clearpath-robot \
     can-utils \
     iproute2 \
+    sudo \
     udev \
     usbutils \
     python3-yaml \
@@ -47,25 +48,26 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # Humble ships clearpath_robot with User=administrator in all systemd units
-# and start scripts, so create that user.
+# and start scripts, so create that user, with passwordless sudo.
 RUN useradd -m -s /bin/bash "${USERNAME}" && \
-    echo "${USERNAME}" > /etc/clearpath_username
+    echo "${USERNAME}" > /etc/clearpath_username && \
+    echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
+    chmod 0440 /etc/sudoers.d/${USERNAME}
 
 # Setup directory for robot configuration
 RUN mkdir -p /etc/clearpath
 
 COPY scripts/cpr-common.sh /usr/local/bin/cpr-common.sh
-RUN chmod 0755 /usr/local/bin/cpr-common.sh
+COPY scripts/cpr-healthcheck.sh /usr/local/bin/cpr-healthcheck
+RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-healthcheck
 
 # Install the entrypoint that validates robot.yaml and starts systemd
 COPY scripts/cpr-robot-entrypoint.sh /usr/local/bin/cpr-robot-entrypoint
 RUN chmod 0755 /usr/local/bin/cpr-robot-entrypoint
 
-# Healthcheck: verify the platform MCU is communicating
+# Healthy once the platform MCU status is publishing
 HEALTHCHECK --interval=10s --timeout=10s --start-period=60s --retries=12 \
-  CMD bash -c '\
-    source /opt/ros/humble/setup.bash && \
-    ros2 topic list --no-daemon 2>/dev/null | grep -qE "/platform/mcu/status"'
+  CMD ["/usr/local/bin/cpr-healthcheck", "robot"]
 
 ENV DEBIAN_FRONTEND=
 

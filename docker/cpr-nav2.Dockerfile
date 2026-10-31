@@ -4,6 +4,7 @@ ARG CPR_BASE_TAG=${ROS_DISTRO}-dev-latest
 FROM ${CPR_BASE_IMAGE}:${CPR_BASE_TAG} AS cpr-nav2
 ARG ROS_DISTRO
 
+USER root
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
@@ -16,21 +17,16 @@ RUN apt-get update \
 
 
 COPY scripts/cpr-common.sh /usr/local/bin/cpr-common.sh
+COPY scripts/cpr-healthcheck.sh /usr/local/bin/cpr-healthcheck
 COPY scripts/cpr-nav2-launch.sh /usr/local/bin/cpr-nav2-launch
-RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-nav2-launch
+RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-healthcheck /usr/local/bin/cpr-nav2-launch
 
-# Healthcheck: passes once bt_navigator and (optionally) slam_toolbox are alive.
-HEALTHCHECK --interval=10s --timeout=10s --start-period=120s --retries=24 \
-  CMD bash -c '\
-    source /opt/ros/${ROS_DISTRO}/setup.bash && \
-    if [[ "${RMW_IMPLEMENTATION:-}" == "rmw_cyclonedds_cpp" ]]; then \
-      export CYCLONEDDS_URI="${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>120</MaxAutoParticipantIndex></Discovery></Domain></CycloneDDS>}"; \
-    fi && \
-    ros2 node list --no-daemon 2>/dev/null | grep -qE "/[^/]+/bt_navigator$" && \
-    ( [[ "${NAV2_ENABLE_SLAM:-false}" != "true" ]] || ros2 node list --no-daemon 2>/dev/null | grep -qE "slam_toolbox" )'
+# Healthy once bt_navigator is active and, with SLAM, a map is published.
+HEALTHCHECK --interval=10s --timeout=20s --start-period=150s --retries=24 \
+  CMD ["/usr/local/bin/cpr-healthcheck", "nav2"]
 
 ENV DEBIAN_FRONTEND=
-USER robot
-WORKDIR /home/robot
+USER ${CPR_USER}
+WORKDIR /home/${CPR_USER}
 
 CMD ["/usr/local/bin/cpr-nav2-launch"]

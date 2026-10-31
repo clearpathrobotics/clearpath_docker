@@ -1,0 +1,4 @@
+# Images only COPY from scripts/ and config/
+*
+!scripts/
+!config/

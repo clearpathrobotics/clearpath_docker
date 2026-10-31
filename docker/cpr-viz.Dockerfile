@@ -3,6 +3,7 @@ ARG CPR_BASE_TAG=jazzy-dev-latest
 ARG ROS_DISTRO=jazzy
 
 FROM ${CPR_BASE_IMAGE}:${CPR_BASE_TAG}
+USER root
 
 # Install clearpath-viz and yaml parsing tool
 RUN apt-get update \
@@ -13,10 +14,14 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY scripts/cpr-common.sh /usr/local/bin/cpr-common.sh
+COPY scripts/cpr-healthcheck.sh /usr/local/bin/cpr-healthcheck
 COPY scripts/cpr-viz-launch.sh /usr/local/bin/cpr-viz-launch
-RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-viz-launch
+RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-healthcheck /usr/local/bin/cpr-viz-launch
+
+HEALTHCHECK --interval=10s --timeout=10s --start-period=60s --retries=24 \
+  CMD ["/usr/local/bin/cpr-healthcheck", "viz"]
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-USER robot
+USER ${CPR_USER}
 CMD ["/usr/local/bin/cpr-viz-launch"]

@@ -41,6 +41,7 @@ RUN apt-get update \
     ros-${ROS_DISTRO}-clearpath-robot \
     can-utils \
     iproute2 \
+    sudo \
     udev \
     usbutils \
     python3-yaml \
@@ -48,9 +49,11 @@ RUN apt-get update \
   && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/*
 
-# Create the robot user expected by clearpath_robot install (Jazzy+).
+# Create the robot user expected by clearpath_robot install (Jazzy+), with passwordless sudo.
 RUN useradd -m -s /bin/bash "${USERNAME}" && \
-    echo "${USERNAME}" > /etc/clearpath_username
+    echo "${USERNAME}" > /etc/clearpath_username && \
+    echo "${USERNAME} ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} && \
+    chmod 0440 /etc/sudoers.d/${USERNAME}
 
 # Setup robot user's bashrc with ROS and dev aliases
 RUN echo "if [ -f /opt/ros/${ROS_DISTRO}/setup.bash ]; then source /opt/ros/${ROS_DISTRO}/setup.bash; fi" >> /home/${USERNAME}/.bashrc \
@@ -62,17 +65,16 @@ RUN mkdir -p /etc/clearpath
 
 COPY scripts/cpr-common.sh /usr/local/bin/cpr-common.sh
 COPY scripts/cpr-dev.sh /usr/local/bin/cpr-dev.sh
-RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-dev.sh
+COPY scripts/cpr-healthcheck.sh /usr/local/bin/cpr-healthcheck
+RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-dev.sh /usr/local/bin/cpr-healthcheck
 
 # Install the entrypoint that validates robot.yaml and starts systemd
 COPY scripts/cpr-robot-entrypoint.sh /usr/local/bin/cpr-robot-entrypoint
 RUN chmod 0755 /usr/local/bin/cpr-robot-entrypoint
 
-# Healthcheck: verify the platform MCU is communicating
+# Healthy once the platform MCU status is publishing
 HEALTHCHECK --interval=10s --timeout=10s --start-period=60s --retries=12 \
-  CMD bash -c '\
-    source /opt/ros/${ROS_DISTRO}/setup.bash && \
-    ros2 topic list --no-daemon 2>/dev/null | grep -qE "/platform/mcu/status"'
+  CMD ["/usr/local/bin/cpr-healthcheck", "robot"]
 
 ENV DEBIAN_FRONTEND=
 

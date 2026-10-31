@@ -4,6 +4,7 @@ ARG CPR_BASE_TAG=${ROS_DISTRO}-dev-latest
 FROM ${CPR_BASE_IMAGE}:${CPR_BASE_TAG} AS cpr-sim
 ARG ROS_DISTRO
 
+USER root
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
@@ -15,24 +16,24 @@ RUN apt-get update \
 
 COPY scripts/cpr-common.sh /usr/local/bin/cpr-common.sh
 COPY scripts/cpr-dev.sh /usr/local/bin/cpr-dev.sh
+COPY scripts/cpr-healthcheck.sh /usr/local/bin/cpr-healthcheck
 COPY scripts/cpr-sim-launch.sh /usr/local/bin/cpr-sim-launch
-RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-dev.sh /usr/local/bin/cpr-sim-launch
+RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-dev.sh /usr/local/bin/cpr-healthcheck /usr/local/bin/cpr-sim-launch
 
-# Healthcheck: passes once the Gazebo→ROS clock bridge is publishing /clock
-# and the robot's odometry topic is available.
-# Downstream services use depends_on: condition: service_healthy to avoid
-# starting before the simulation is ready.
-HEALTHCHECK --interval=10s --timeout=15s --start-period=120s --retries=24 \
-  CMD bash -c '\
-    source /opt/ros/${ROS_DISTRO}/setup.bash && \
-    if [[ "${RMW_IMPLEMENTATION:-}" == "rmw_cyclonedds_cpp" ]]; then \
-      export CYCLONEDDS_URI="${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>120</MaxAutoParticipantIndex></Discovery></Domain></CycloneDDS>}"; \
-    fi && \
-    timeout 8 ros2 topic echo /clock --once >/dev/null 2>&1 && \
-    ros2 topic list --no-daemon 2>/dev/null | grep -qE "/[^/]+/platform/odom/filtered$"'
+# Healthy once /clock and the robot's odometry are publishing; downstream
+# services wait on it with depends_on: condition: service_healthy.
+HEALTHCHECK --interval=10s --timeout=20s --start-period=120s --retries=24 \
+  CMD ["/usr/local/bin/cpr-healthcheck", "sim"]
 
 ENV DEBIAN_FRONTEND=
-USER robot
-WORKDIR /home/robot
+
+# Gazebo model cache at a user-independent path (GZ_ for Harmonic, IGN_ for Fortress/Humble).
+# Pre-created so a volume mounted here starts owned by CPR_USER instead of root.
+ENV GZ_FUEL_CACHE_PATH=/var/cache/gz/fuel \
+    IGN_FUEL_CACHE_PATH=/var/cache/gz/fuel
+RUN mkdir -p /var/cache/gz/fuel && chown -R ${CPR_USER}:${CPR_USER} /var/cache/gz
+
+USER ${CPR_USER}
+WORKDIR /home/${CPR_USER}
 
 CMD ["/usr/local/bin/cpr-sim-launch"]

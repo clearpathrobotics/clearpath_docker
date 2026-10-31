@@ -1,5 +1,17 @@
 ARG ROS_DISTRO=jazzy
-FROM ros:${ROS_DISTRO}-ros-base AS cpr-ros-base
+FROM ros:${ROS_DISTRO}-ros-base AS ros
+
+# Non-root user name for derived images; Humble matches clearpath_robot's administrator user
+FROM ros AS user-humble
+ENV CPR_USER=administrator
+FROM ros AS user-jazzy
+ENV CPR_USER=robot
+FROM ros AS user-lyrical
+ENV CPR_USER=robot
+FROM ros AS user-rolling
+ENV CPR_USER=robot
+
+FROM user-${ROS_DISTRO} AS cpr-ros-base
 ARG ROS_DISTRO
 
 # Fix issue with new ubuntu user
@@ -52,6 +64,10 @@ RUN UBUNTU_CODENAME="$(lsb_release -cs)" \
 RUN wget https://raw.githubusercontent.com/clearpathrobotics/public-rosdistro/master/rosdep/50-clearpath.list -O /etc/ros/rosdep/sources.list.d/50-clearpath.list
 
 ENV DEBIAN_FRONTEND=
+
+# Default CycloneDDS profile; compose bind-mounts config/cyclonedds.xml (or CYCLONEDDS_CONFIG) over it
+COPY config/cyclonedds.xml /etc/cpr/cyclonedds.xml
+ENV CYCLONEDDS_URI=file:///etc/cpr/cyclonedds.xml
 
 WORKDIR /
 

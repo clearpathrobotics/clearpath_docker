@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Default CycloneDDS profile for the cpr images. Host ROS processes that must
+     discover the containers need the same settings:
+       export CYCLONEDDS_URI=file://<repo>/config/cyclonedds.xml -->
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain Id="any">
+    <Discovery>
+      <!-- LOCALHOST discovery caps a host at 32 participants by default; sim + nav2 + viz alone use ~31 -->
+      <ParticipantIndex>auto</ParticipantIndex>
+      <MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>
+    </Discovery>
+  </Domain>
+</CycloneDDS>
