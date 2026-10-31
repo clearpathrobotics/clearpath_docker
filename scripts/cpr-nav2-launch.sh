@@ -10,7 +10,6 @@ launch_file="${NAV2_LAUNCH_FILE:-nav2.launch.py}"
 enable_slam="${NAV2_ENABLE_SLAM:-false}"
 slam_sync="${NAV2_SLAM_SYNC:-false}"
 auto_nav2_startup="${AUTO_NAV2_STARTUP:-true}"
-wait_for_sim="${WAIT_FOR_SIM:-false}"
 startup_timeout_s="${NAV2_STARTUP_TIMEOUT_S:-120}"
 service_call_timeout_s="${NAV2_SERVICE_CALL_TIMEOUT_S:-8}"
 active_wait_timeout_s="${NAV2_ACTIVE_WAIT_TIMEOUT_S:-60}"
@@ -29,80 +28,44 @@ lifecycle_nodes=(
 
 args=(
   "use_sim_time:=${use_sim_time}"
-  "setup_path:=${setup_path}"
+  # Humble's launch files append "robot.yaml" without a separator
+  "setup_path:=${setup_path}/"
 )
 
 if [[ -n "${scan_topic}" ]]; then
   args+=("scan_topic:=${scan_topic}")
 fi
 
-log_robot_identity() {
-  echo "[cpr-nav2-launch] robot namespace=$(detect_namespace || echo unknown)"
-}
+namespace="$(detect_namespace)"
 
-wait_for_topic_once() {
-  local topic="$1"
-  local per_try_timeout_s="${2:-5}"
-  local total_timeout_s="${3:-${topic_wait_timeout_s}}"
-  local waited=0
-
-  while (( waited < total_timeout_s )); do
-    if timeout "${per_try_timeout_s}" ros2 topic echo --once "${topic}" >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep 1
-    waited=$(( waited + 1 ))
-  done
-
-  return 1
-}
+log_env ROBOT_NAMESPACE USE_SIM_TIME NAV2_LAUNCH_FILE NAV2_ENABLE_SLAM NAV2_SLAM_SYNC \
+  SCAN_TOPIC AUTO_NAV2_STARTUP WAIT_FOR_SIM
+log_robot_yaml
+echo "[cpr-nav2-launch] robot namespace=${namespace:-unknown}"
 
 wait_for_nav2_inputs() {
-  local namespace="$1"
+  local topic
 
-  if [[ -z "${namespace}" ]]; then
-    echo "[cpr-nav2-launch] Namespace not found, skipping pre-nav2 topic gates" >&2
-    return 0
-  fi
+  have_namespace "${namespace}" "pre-Nav2 topic gates" || return 0
 
   echo "[cpr-nav2-launch] waiting for odom and TF topics before Nav2 bringup..." >&2
-
-  echo "[cpr-nav2-launch] waiting for /${namespace}/platform/odom/filtered" >&2
-  if ! wait_for_topic_once "/${namespace}/platform/odom/filtered" 5 "${topic_wait_timeout_s}"; then
-    echo "[cpr-nav2-launch] timed out waiting for /${namespace}/platform/odom/filtered; continuing" >&2
-  fi
-
-  echo "[cpr-nav2-launch] waiting for /${namespace}/tf_static" >&2
-  if ! wait_for_topic_once "/${namespace}/tf_static" 5 "${topic_wait_timeout_s}"; then
-    echo "[cpr-nav2-launch] timed out waiting for /${namespace}/tf_static; continuing" >&2
-  fi
-
-  echo "[cpr-nav2-launch] waiting for /${namespace}/tf" >&2
-  if ! wait_for_topic_once "/${namespace}/tf" 5 "${topic_wait_timeout_s}"; then
-    echo "[cpr-nav2-launch] timed out waiting for /${namespace}/tf; continuing" >&2
-  fi
+  for topic in platform/odom/filtered tf_static tf; do
+    echo "[cpr-nav2-launch] waiting for /${namespace}/${topic}" >&2
+    wait_for_topic_publishing "/${namespace}/${topic}" "${topic_wait_timeout_s}" ||
+      echo "[cpr-nav2-launch] timed out waiting for /${namespace}/${topic}; continuing" >&2
+  done
 
   echo "[cpr-nav2-launch] waiting briefly for /${namespace}/map (best effort)" >&2
-  for _ in $(seq 1 5); do
-    if timeout 2 ros2 topic echo --once "/${namespace}/map" >/dev/null 2>&1; then
-      break
-    fi
-    sleep 1
-  done
+  wait_for_topic_publishing "/${namespace}/map" 30 || true
 }
 
 bootstrap_lifecycle() {
-  local namespace="$1"
   local service
   local node
-  local state
   local i
   local all_active
 
-  if [[ -z "${namespace}" ]]; then
-    echo "[cpr-nav2-launch] Namespace not found, skipping automatic lifecycle bootstrap" >&2
-    return 0
-  fi
+  have_namespace "${namespace}" "automatic lifecycle bootstrap" || return 0
 
   service="/${namespace}/lifecycle_manager_navigation/manage_nodes"
   if ! wait_for_service "${service}" "${startup_timeout_s}"; then
@@ -121,8 +84,7 @@ bootstrap_lifecycle() {
   for ((i=0; i<active_wait_timeout_s; i++)); do
     all_active="true"
     for node in "${lifecycle_nodes[@]}"; do
-      state="$(ros2 lifecycle get "/${namespace}/${node}" 2>/dev/null | awk -F'[][]' '/^active/ {print $2}')"
-      if [[ "${state}" != "3" ]]; then
+      if [[ "$(get_node_state "/${namespace}/${node}")" != "active" ]]; then
         all_active="false"
         break
       fi
@@ -149,28 +111,18 @@ bootstrap_lifecycle() {
 }
 
 if [[ "${auto_nav2_startup}" == "true" ]]; then
-  namespace="$(detect_namespace)"
-  (
-    bootstrap_lifecycle "${namespace}"
-  ) &
+  bootstrap_lifecycle &
 fi
 
-# --- Optional sim-readiness gate ---
-if [[ "${wait_for_sim}" == "true" ]]; then
-  echo "[cpr-nav2-launch] WAIT_FOR_SIM=true, waiting for /clock..." >&2
-  if ! wait_for_topic_once "/clock" 5 "${topic_wait_timeout_s}"; then
-    echo "[cpr-nav2-launch] timed out waiting for /clock; continuing" >&2
-  fi
-fi
+WAIT_FOR_SIM="${WAIT_FOR_SIM:-false}" wait_for_sim_if_enabled "${namespace}"
 
 slam_pid=""
-namespace="$(detect_namespace)"
 
 if [[ "${enable_slam}" == "true" && "${launch_file}" != "slam.launch.py" ]]; then
   ros2 launch clearpath_nav2_demos slam.launch.py "${args[@]}" "sync:=${slam_sync}" &
   slam_pid="$!"
 
-  wait_for_nav2_inputs "${namespace}"
+  wait_for_nav2_inputs
 fi
 
 cleanup() {
@@ -181,8 +133,5 @@ cleanup() {
 }
 
 trap cleanup EXIT INT TERM
-
-log_robot_yaml
-log_robot_identity
 
 ros2 launch clearpath_nav2_demos "${launch_file}" "${args[@]}" "$@"

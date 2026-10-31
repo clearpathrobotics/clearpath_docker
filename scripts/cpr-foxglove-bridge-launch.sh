@@ -17,6 +17,8 @@ echo "    Open connection → Foxglove WebSocket → ws://localhost:${port}"
 echo ""
 echo "============================================="
 
+log_env FOXGLOVE_BRIDGE_PORT WAIT_FOR_SIM WAIT_FOR_TIMEOUT_SEC
+
 wait_for_sim_if_enabled
 
 echo "Starting foxglove_bridge on port ${port}..."

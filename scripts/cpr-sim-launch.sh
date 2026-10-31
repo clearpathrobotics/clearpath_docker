@@ -16,10 +16,7 @@ controller_recovery_loop() {
 	local namespace="$1"
 	local cm
 
-	if [[ -z "${namespace}" ]]; then
-		echo "[cpr-sim-launch] Namespace not found, skipping controller recovery" >&2
-		return 0
-	fi
+	have_namespace "${namespace}" "controller recovery" || return 0
 
 	cm="/${namespace}/controller_manager"
 	echo "[cpr-sim-launch] Controller recovery enabled for ${cm}" >&2
@@ -52,7 +49,9 @@ controller_recovery_loop() {
 }
 
 namespace="$(detect_namespace)"
+log_env GAZEBO_HEADLESS GAZEBO_STARTUP_TIMEOUT GAZEBO_MAX_RESTARTS DISPLAY
 log_robot_yaml
+echo "[cpr-sim-launch] robot namespace=${namespace:-unknown}" >&2
 controller_recovery_loop "${namespace}" &
 
 # --- Gazebo launch with watchdog ---
@@ -62,17 +61,20 @@ restart_count=0
 while true; do
 	echo "[cpr-sim-launch] Starting Gazebo (attempt $((restart_count + 1))/$((max_restarts + 1)))" >&2
 
-	ros2 launch clearpath_gz simulation.launch.py "setup_path:=${setup_path}" "headless:=${headless}" "$@" &
+	# Own process group so a restart can kill every child (gz/ign, bridges, spawners)
+	setsid ros2 launch clearpath_gz simulation.launch.py "setup_path:=${setup_path}/" "headless:=${headless}" "$@" &
 	gz_pid=$!
 
 	# Wait for /clock to appear
 	clock_found=false
-	for _ in $(seq 1 "${gazebo_startup_timeout}"); do
+	start=${SECONDS}
+	while (( SECONDS - start < gazebo_startup_timeout )); do
 		if ! kill -0 "${gz_pid}" 2>/dev/null; then
 			echo "[cpr-sim-launch] Gazebo process exited unexpectedly" >&2
 			break
 		fi
-		if timeout 1 ros2 topic echo /clock --once >/dev/null 2>&1; then
+		# The ros2 CLI alone takes >1 s to start on Humble
+		if topic_publishing /clock 5; then
 			clock_found=true
 			break
 		fi
@@ -90,9 +92,11 @@ while true; do
 	restart_count=$((restart_count + 1))
 	echo "[cpr-sim-launch] /clock not detected after ${gazebo_startup_timeout}s, killing Gazebo (restart ${restart_count}/${max_restarts})" >&2
 
-	kill "${gz_pid}" 2>/dev/null || true
-	pkill -9 -f "gz sim" 2>/dev/null || true
+	kill -TERM -- "-${gz_pid}" 2>/dev/null || true
 	sleep 3
+	kill -KILL -- "-${gz_pid}" 2>/dev/null || true
+	# Gazebo's server/gui leave the launch process group; Humble names them "ign gazebo"
+	pkill -9 -f "gz sim|ign gazebo" 2>/dev/null || true
 
 	if (( restart_count > max_restarts )); then
 		echo "[cpr-sim-launch] Max restarts exceeded, giving up" >&2
