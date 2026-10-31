@@ -15,8 +15,8 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 
-COPY cpr-common.sh /usr/local/bin/cpr-common.sh
-COPY cpr-nav2-launch.sh /usr/local/bin/cpr-nav2-launch
+COPY scripts/cpr-common.sh /usr/local/bin/cpr-common.sh
+COPY scripts/cpr-nav2-launch.sh /usr/local/bin/cpr-nav2-launch
 RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-nav2-launch
 
 # Healthcheck: passes once bt_navigator and (optionally) slam_toolbox are alive.

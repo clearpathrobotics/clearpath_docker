@@ -11,7 +11,7 @@ services:
     container_name: cpr-sim-nav2-${ROS_DISTRO:-jazzy}
     build:
       context: .
-      dockerfile: cpr-sim.Dockerfile
+      dockerfile: docker/cpr-sim.Dockerfile
       args:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
         CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
@@ -42,7 +42,7 @@ services:
     container_name: cpr-nav2-stack-${ROS_DISTRO:-jazzy}
     build:
       context: .
-      dockerfile: cpr-nav2.Dockerfile
+      dockerfile: docker/cpr-nav2.Dockerfile
       args:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
         CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
@@ -93,7 +93,7 @@ services:
     container_name: cpr-viz-nav2-${ROS_DISTRO:-jazzy}
     build:
       context: .
-      dockerfile: cpr-viz.Dockerfile
+      dockerfile: docker/cpr-viz.Dockerfile
       args:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
         CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker

@@ -14,8 +14,8 @@ RUN apt-get update \
   && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/*
 
-COPY cpr-common.sh /usr/local/bin/cpr-common.sh
-COPY cpr-foxglove-bridge-launch.sh /usr/local/bin/cpr-foxglove-bridge-launch
+COPY scripts/cpr-common.sh /usr/local/bin/cpr-common.sh
+COPY scripts/cpr-foxglove-bridge-launch.sh /usr/local/bin/cpr-foxglove-bridge-launch
 RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-foxglove-bridge-launch
 
 EXPOSE 8765

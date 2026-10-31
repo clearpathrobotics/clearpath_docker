@@ -11,7 +11,7 @@ Jazzy-only common, robot, and sim variants. The dev and CI images are both
 built `FROM` the base image; the common and robot images are built `FROM` the
 CI image; the sim image is built `FROM` the dev image.
 
-### Base — [cpr-base.Dockerfile](cpr-base.Dockerfile)
+### Base — [cpr-base.Dockerfile](docker/cpr-base.Dockerfile)
 
 Headless server-side image — no GUI tooling. `ros:<distro>-ros-base`
 extended with the Clearpath public rosdistro index and the Clearpath apt
@@ -19,7 +19,7 @@ source (when available for the Ubuntu codename; amd64 only). Slim, no extra tool
 no non-root user — suitable as a runtime base for robots and as the parent
 for the dev and CI images.
 
-### Dev — [cpr-dev.Dockerfile](cpr-dev.Dockerfile)
+### Dev — [cpr-dev.Dockerfile](docker/cpr-dev.Dockerfile)
 
 Headless server-side dev/build environment — no GUI tooling (no `rviz2`,
 `rqt`, X11 libs). Built on the base image. Adds `ros-build-essential`,
@@ -28,13 +28,13 @@ common Python tooling (`pip`, `pep8`, `autopep8`, `pylint`), editors
 1000) with passwordless `sudo`. Bash history is redirected to
 `/commandhistory` so it can be persisted via a volume.
 
-### CI — [cpr-ci.Dockerfile](cpr-ci.Dockerfile)
+### CI — [cpr-ci.Dockerfile](docker/cpr-ci.Dockerfile)
 
 Built on the base image. Adds the toolchain needed to build and test ROS 2
 packages: `ros-dev-tools`, `colcon` mixins/metadata, `flake8` plugins,
 `pytest` helpers, lcov, and the RTI Connext DDS package matching the distro.
 
-### CI Common — [cpr-ci-common.Dockerfile](cpr-ci-common.Dockerfile)
+### CI Common — [cpr-ci-common.Dockerfile](docker/cpr-ci-common.Dockerfile)
 
 Built on the CI image. Pre-installs the released
 `ros-<distro>-clearpath-common` package so all of its build, test, and
@@ -45,14 +45,14 @@ install` is a near no-op and the build only needs to compile. The
 from-source overlay workspace shadows the pre-installed binary at runtime.
 This variant is only built for `humble` and `jazzy`.
 
-### CI Robot — [cpr-ci-robot.Dockerfile](cpr-ci-robot.Dockerfile)
+### CI Robot — [cpr-ci-robot.Dockerfile](docker/cpr-ci-robot.Dockerfile)
 
 Built on the CI image. Installs the released `ros-<distro>-clearpath-robot`
 package so CI jobs targeting robot stacks can start from an image with the
 robot metapackage and its dependencies already present. This variant is only
 built for `humble` and `jazzy`.
 
-### Sim — [cpr-sim.Dockerfile](cpr-sim.Dockerfile)
+### Sim — [cpr-sim.Dockerfile](docker/cpr-sim.Dockerfile)
 
 Built on the dev image. Installs the released
 `ros-<distro>-clearpath-gz` package, switches the default runtime user to
@@ -106,7 +106,7 @@ docker compose -f compose-sim-viz-nav2.yaml up
 SETUP_PATH_HOST=$HOME/my_robot docker compose -f compose-sim-viz-nav2.yaml up
 ```
 
-### Viz — [cpr-viz.Dockerfile](cpr-viz.Dockerfile)
+### Viz — [cpr-viz.Dockerfile](docker/cpr-viz.Dockerfile)
 
 Built on the dev image. Installs `ros-<distro>-clearpath-viz`, reads the
 namespace from `robot.yaml` in the setup path, and launches:
@@ -161,7 +161,7 @@ and services flow between them automatically.
 
 This variant is only built for `humble` and `jazzy`.
 
-### Foxglove Bridge — [cpr-foxglove-bridge.Dockerfile](cpr-foxglove-bridge.Dockerfile)
+### Foxglove Bridge — [cpr-foxglove-bridge.Dockerfile](docker/cpr-foxglove-bridge.Dockerfile)
 
 Built on the base image. Headless container that runs a
 [foxglove_bridge](https://docs.foxglove.dev/docs/connecting-to-data/ros-foxglove-bridge)
@@ -188,7 +188,7 @@ Then open Lichtblick → **Open connection** → **Foxglove WebSocket** →
 
 See [Compose environment variables](#compose-environment-variables) for all available variables.
 
-### Robot — [cpr-robot.Dockerfile](cpr-robot.Dockerfile) / [cpr-robot-humble.Dockerfile](cpr-robot-humble.Dockerfile)
+### Robot — [cpr-robot.Dockerfile](docker/cpr-robot.Dockerfile) / [cpr-robot-humble.Dockerfile](docker/cpr-robot-humble.Dockerfile)
 
 Locally-built image that runs the full Clearpath robot stack on real hardware.
 Uses `systemd` as PID 1 to manage the clearpath platform, sensor, and
@@ -213,7 +213,7 @@ SETUP_PATH_HOST=$HOME/clearpath docker compose up -d robot
 **Pull and run — Humble:**
 
 ```sh
-ROBOT_DOCKERFILE=cpr-robot-humble.Dockerfile \
+ROBOT_DOCKERFILE=docker/cpr-robot-humble.Dockerfile \
   ROS_DISTRO=humble \
   RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
   SETUP_PATH_HOST=$HOME/clearpath \
@@ -388,7 +388,7 @@ Base image:
 ```sh
 docker build \
   --build-arg ROS_DISTRO=jazzy \
-  -f cpr-base.Dockerfile \
+  -f docker/cpr-base.Dockerfile \
   -t cpr-base:jazzy .
 ```
 
@@ -399,7 +399,7 @@ docker build \
   --build-arg ROS_DISTRO=jazzy \
   --build-arg CPR_BASE_IMAGE=cpr-base \
   --build-arg CPR_BASE_TAG=jazzy \
-  -f cpr-dev.Dockerfile \
+  -f docker/cpr-dev.Dockerfile \
   -t cpr-dev:jazzy .
 ```
 
@@ -410,7 +410,7 @@ docker build \
   --build-arg ROS_DISTRO=jazzy \
   --build-arg CPR_BASE_IMAGE=cpr-base \
   --build-arg CPR_BASE_TAG=jazzy \
-  -f cpr-ci.Dockerfile \
+  -f docker/cpr-ci.Dockerfile \
   -t cpr-ci:jazzy .
 ```
 
@@ -421,7 +421,7 @@ docker build \
   --build-arg ROS_DISTRO=jazzy \
   --build-arg CPR_BASE_IMAGE=cpr-ci \
   --build-arg CPR_BASE_TAG=jazzy \
-  -f cpr-ci-common.Dockerfile \
+  -f docker/cpr-ci-common.Dockerfile \
   -t cpr-ci-common:jazzy .
 ```
 
@@ -432,7 +432,7 @@ docker build \
   --build-arg ROS_DISTRO=jazzy \
   --build-arg CPR_BASE_IMAGE=cpr-ci \
   --build-arg CPR_BASE_TAG=jazzy \
-  -f cpr-ci-robot.Dockerfile \
+  -f docker/cpr-ci-robot.Dockerfile \
   -t cpr-ci-robot:jazzy .
 ```
 
@@ -443,7 +443,7 @@ docker build \
   --build-arg ROS_DISTRO=jazzy \
   --build-arg CPR_BASE_IMAGE=cpr-dev \
   --build-arg CPR_BASE_TAG=jazzy \
-  -f cpr-sim.Dockerfile \
+  -f docker/cpr-sim.Dockerfile \
   -t cpr-sim:jazzy .
 ```
 
@@ -465,7 +465,7 @@ docker build \
   --build-arg ROS_DISTRO=jazzy \
   --build-arg CPR_BASE_IMAGE=cpr-base \
   --build-arg CPR_BASE_TAG=jazzy \
-  -f cpr-foxglove-bridge.Dockerfile \
+  -f docker/cpr-foxglove-bridge.Dockerfile \
   -t cpr-foxglove-bridge:jazzy .
 ```
 

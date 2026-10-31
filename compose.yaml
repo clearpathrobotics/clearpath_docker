@@ -50,7 +50,7 @@ services:
     container_name: cpr-dev-${ROS_DISTRO:-jazzy}-local
     build:
       context: .
-      dockerfile: cpr-dev.Dockerfile
+      dockerfile: docker/cpr-dev.Dockerfile
       args:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
         CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
@@ -106,7 +106,7 @@ services:
     container_name: cpr-sim-${ROS_DISTRO:-jazzy}-local
     build:
       context: .
-      dockerfile: cpr-sim-local.Dockerfile
+      dockerfile: docker/cpr-sim-local.Dockerfile
       args:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
         CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
@@ -119,7 +119,7 @@ services:
     container_name: cpr-nav2-${ROS_DISTRO:-jazzy}
     build:
       context: .
-      dockerfile: cpr-nav2.Dockerfile
+      dockerfile: docker/cpr-nav2.Dockerfile
       args:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
         CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
@@ -265,7 +265,7 @@ services:
     container_name: cpr-robot-${ROS_DISTRO:-jazzy}-local
     build:
       context: .
-      dockerfile: cpr-robot-local.Dockerfile
+      dockerfile: docker/cpr-robot-local.Dockerfile
       args:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
         CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker

@@ -67,7 +67,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ./cpr-base.Dockerfile
+          file: ./docker/cpr-base.Dockerfile
           platforms: linux/${{ matrix.arch }}
           build-args: |
             ROS_DISTRO=${{ matrix.ros_distro }}
@@ -195,7 +195,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ./cpr-ci.Dockerfile
+          file: ./docker/cpr-ci.Dockerfile
           push: true
           platforms: linux/amd64
           build-args: |
@@ -263,7 +263,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ./cpr-ci-common.Dockerfile
+          file: ./docker/cpr-ci-common.Dockerfile
           push: true
           platforms: linux/amd64
           build-args: |
@@ -331,7 +331,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ./cpr-ci-robot.Dockerfile
+          file: ./docker/cpr-ci-robot.Dockerfile
           push: true
           platforms: linux/amd64
           build-args: |
@@ -349,9 +349,9 @@ jobs:
       matrix:
         include:
           - ros_distro: jazzy
-            dockerfile: cpr-robot.Dockerfile
+            dockerfile: docker/cpr-robot.Dockerfile
           - ros_distro: humble
-            dockerfile: cpr-robot-humble.Dockerfile
+            dockerfile: docker/cpr-robot-humble.Dockerfile
 
     steps:
       - name: Checkout repo
@@ -471,7 +471,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ./cpr-sim.Dockerfile
+          file: ./docker/cpr-sim.Dockerfile
           push: true
           platforms: linux/amd64
           build-args: |
@@ -546,7 +546,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ./cpr-dev.Dockerfile
+          file: ./docker/cpr-dev.Dockerfile
           platforms: linux/${{ matrix.arch }}
           build-args: |
             ROS_DISTRO=${{ matrix.ros_distro }}
@@ -676,7 +676,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ./cpr-nav2.Dockerfile
+          file: ./docker/cpr-nav2.Dockerfile
           push: true
           platforms: linux/amd64
           build-args: |
@@ -744,7 +744,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ./cpr-foxglove-bridge.Dockerfile
+          file: ./docker/cpr-foxglove-bridge.Dockerfile
           push: true
           platforms: linux/amd64
           build-args: |
@@ -812,7 +812,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ./cpr-viz.Dockerfile
+          file: ./docker/cpr-viz.Dockerfile
           push: true
           platforms: linux/amd64
           build-args: |

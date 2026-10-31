@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y \
   && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/*
 
-COPY cpr-dev.sh /usr/local/bin/cpr-dev.sh
+COPY scripts/cpr-dev.sh /usr/local/bin/cpr-dev.sh
 RUN chmod 0755 /usr/local/bin/cpr-dev.sh
 
 ARG USERNAME=robot

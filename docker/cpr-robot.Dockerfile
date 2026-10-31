@@ -1,7 +1,9 @@
+ARG ROS_DISTRO=jazzy
 ARG CPR_BASE_IMAGE=ghcr.io/clearpathrobotics/clearpath_docker
-ARG CPR_BASE_TAG=humble-latest
-ARG USERNAME=administrator
-FROM ${CPR_BASE_IMAGE}:${CPR_BASE_TAG} AS cpr-robot-humble
+ARG CPR_BASE_TAG=${ROS_DISTRO}-latest
+ARG USERNAME=robot
+FROM ${CPR_BASE_IMAGE}:${CPR_BASE_TAG} AS cpr-robot
+ARG ROS_DISTRO
 ARG USERNAME
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -33,10 +35,10 @@ RUN systemctl mask \
     suspend.target \
     hibernate.target
 
-# Install Clearpath robot packages, CAN utilities, and network tools
+# Install Clearpath robot packages, robot_upstart, CAN utilities, and network tools
 RUN apt-get update \
   && apt-get install -y \
-    ros-humble-clearpath-robot \
+    ros-${ROS_DISTRO}-clearpath-robot \
     can-utils \
     iproute2 \
     udev \
@@ -46,25 +48,30 @@ RUN apt-get update \
   && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/*
 
-# Humble ships clearpath_robot with User=administrator in all systemd units
-# and start scripts, so create that user.
+# Create the robot user expected by clearpath_robot install (Jazzy+).
 RUN useradd -m -s /bin/bash "${USERNAME}" && \
     echo "${USERNAME}" > /etc/clearpath_username
+
+# Setup robot user's bashrc with ROS and dev aliases
+RUN echo "if [ -f /opt/ros/${ROS_DISTRO}/setup.bash ]; then source /opt/ros/${ROS_DISTRO}/setup.bash; fi" >> /home/${USERNAME}/.bashrc \
+    && echo "source /usr/local/bin/cpr-dev.sh" >> /home/${USERNAME}/.bashrc \
+    && chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.bashrc
 
 # Setup directory for robot configuration
 RUN mkdir -p /etc/clearpath
 
-COPY cpr-common.sh /usr/local/bin/cpr-common.sh
-RUN chmod 0755 /usr/local/bin/cpr-common.sh
+COPY scripts/cpr-common.sh /usr/local/bin/cpr-common.sh
+COPY scripts/cpr-dev.sh /usr/local/bin/cpr-dev.sh
+RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-dev.sh
 
 # Install the entrypoint that validates robot.yaml and starts systemd
-COPY cpr-robot-entrypoint.sh /usr/local/bin/cpr-robot-entrypoint
+COPY scripts/cpr-robot-entrypoint.sh /usr/local/bin/cpr-robot-entrypoint
 RUN chmod 0755 /usr/local/bin/cpr-robot-entrypoint
 
 # Healthcheck: verify the platform MCU is communicating
 HEALTHCHECK --interval=10s --timeout=10s --start-period=60s --retries=12 \
   CMD bash -c '\
-    source /opt/ros/humble/setup.bash && \
+    source /opt/ros/${ROS_DISTRO}/setup.bash && \
     ros2 topic list --no-daemon 2>/dev/null | grep -qE "/platform/mcu/status"'
 
 ENV DEBIAN_FRONTEND=
