@@ -11,6 +11,8 @@ ENV CPR_USER=robot
 FROM ros AS user-rolling
 ENV CPR_USER=robot
 
+# user-${ROS_DISTRO} is a build stage above, not an untagged image
+# hadolint ignore=DL3006
 FROM user-${ROS_DISTRO} AS cpr-ros-base
 ARG ROS_DISTRO
 
@@ -45,6 +47,8 @@ RUN git clone https://github.com/mikekaram/rosdep-generator.git \
   && rm -rf rosdep-generator
 RUN echo "yaml file:///etc/ros/rosdep/clearpathrobotics-public-rosdistro-${ROS_DISTRO}.yaml ${ROS_DISTRO}" > /etc/ros/rosdep/sources.list.d/90-clearpathrobotics-public-rosdistro-${ROS_DISTRO}.list
 
+# /bin/sh (dash) has no pipefail; a bad key makes the next apt-get update fail
+# hadolint ignore=DL4006
 RUN mkdir -p /etc/apt/keyrings \
   && wget https://packages.clearpathrobotics.com/public.key -qO- \
     | gpg --dearmor -o /etc/apt/keyrings/clearpathrobotics.gpg

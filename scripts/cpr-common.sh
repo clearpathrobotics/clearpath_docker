@@ -5,7 +5,7 @@
 
 # Setup path must be provided via SETUP_PATH environment variable (typically set in docker-compose).
 # Strip any trailing slashes so path joins (e.g. ${setup_path}/robot.yaml) are clean.
-setup_path="${SETUP_PATH}"
+setup_path="${SETUP_PATH:-/etc/clearpath}"
 setup_path="${setup_path%/}"
 
 # log_env [VAR ...]
@@ -26,13 +26,13 @@ log_env() {
 log_robot_yaml() {
   local yaml_file="${1:-${setup_path}/robot.yaml}"
   local host_path=""
-  
+
   # If SETUP_PATH_HOST is set, show the host path for easier debugging
   if [[ -n "${SETUP_PATH_HOST:-}" ]]; then
-    local rel_path="${yaml_file#${setup_path}/}"
+    local rel_path="${yaml_file#"${setup_path}"/}"
     host_path=" (host: ${SETUP_PATH_HOST}/${rel_path})"
   fi
-  
+
   echo "[cpr] robot.yaml path: ${yaml_file}${host_path}" >&2
   if [[ -f "${yaml_file}" ]]; then
     echo "[cpr] robot.yaml contents:" >&2

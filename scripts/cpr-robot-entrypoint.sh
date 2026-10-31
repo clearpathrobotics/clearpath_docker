@@ -48,7 +48,8 @@ log_robot_yaml "${ROBOT_YAML}"
 #   clearpath-shutdown.service     (shutdown handler)
 echo "[cpr-robot] Running clearpath_robot install script..."
 set +u
-source /opt/ros/${ROS_DISTRO}/setup.bash
+# shellcheck source=/dev/null
+source "/opt/ros/${ROS_DISTRO}/setup.bash"
 set -u
 
 # Humble defaults to CycloneDDS which may not be installed; force FastDDS

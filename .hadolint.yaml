@@ -1,0 +1,8 @@
+failure-threshold: warning
+ignored:
+  # ROS and Clearpath apt packages track the latest release; they aren't version-pinned
+  - DL3008
+  # USERNAME is a login name, not a secret
+  - DL3064
+  # The base image installs both wget and curl for users
+  - DL4001
