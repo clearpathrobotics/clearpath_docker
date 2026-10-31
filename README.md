@@ -24,9 +24,11 @@ for the dev and CI images.
 Headless server-side dev/build environment — no GUI tooling (no `rviz2`,
 `rqt`, X11 libs). Built on the base image. Adds `ros-build-essential`,
 common Python tooling (`pip`, `pep8`, `autopep8`, `pylint`), editors
-(`nano`, `vim`), `bash-completion`, and a non-root `robot` user (uid/gid
-1000) with passwordless `sudo`. Bash history is redirected to
-`/commandhistory` so it can be persisted via a volume.
+(`nano`, `vim`), `bash-completion`, and a non-root user (uid/gid 1000) with
+passwordless `sudo`: `administrator` on Humble (matching `clearpath_robot`),
+`robot` on other distros. The image runs as that user by default and exports
+its name as `CPR_USER`; the sim, nav2, and viz images inherit it. Bash history
+is redirected to `/commandhistory` so it can be persisted via a volume.
 
 ### CI — [cpr-ci.Dockerfile](docker/cpr-ci.Dockerfile)
 
@@ -66,7 +68,7 @@ The launcher defaults `setup_path` to `$HOME/setup/path/`, and you can
 override it by passing `SETUP_PATH=/some/other/path/` into the container.
 This variant is only built for `humble` and `jazzy`.
 
-### Nav2 Demos — [cpr-nav2.Dockerfile](cpr-nav2.Dockerfile)
+### Nav2 Demos — [cpr-nav2.Dockerfile](docker/cpr-nav2.Dockerfile)
 
 Built on the dev image. Installs `ros-<distro>-clearpath-nav2-demos` and
 `ros-<distro>-clearpath-common` (which provides CycloneDDS, Fast DDS, and
@@ -130,7 +132,7 @@ ROS_DISTRO=jazzy docker compose up viz
 
 ```sh
 xhost +local:
-ROS_DISTRO=jazzy docker compose -f compose-sim-viz.yaml up
+ROS_DISTRO=jazzy docker compose up sim viz
 ```
 
 **Usage — Sim + Nav2 + Viz together:**
@@ -190,35 +192,95 @@ See [Compose environment variables](#compose-environment-variables) for all avai
 
 ### Robot — [cpr-robot.Dockerfile](docker/cpr-robot.Dockerfile) / [cpr-robot-humble.Dockerfile](docker/cpr-robot-humble.Dockerfile)
 
-Locally-built image that runs the full Clearpath robot stack on real hardware.
-Uses `systemd` as PID 1 to manage the clearpath platform, sensor, and
-manipulator services. Requires a `robot.yaml` mounted at `/etc/clearpath/`.
+Runs the full Clearpath robot stack on real hardware, in place of a native
+`clearpath_robot` install. Uses `systemd` as PID 1 to manage the clearpath
+platform, sensor, and manipulator services. Requires a `robot.yaml` mounted at
+`/etc/clearpath/`.
 
-Two Dockerfiles are provided:
-
-| Dockerfile | Distro | Default user | Published tag |
+| Dockerfile | Distro | Clearpath user | Published tag |
 | --- | --- | --- | --- |
 | `cpr-robot.Dockerfile` | Jazzy+ | `robot` | `jazzy-robot-latest` |
 | `cpr-robot-humble.Dockerfile` | Humble | `administrator` | `humble-robot-latest` |
 
-The active Dockerfile is controlled by the `ROBOT_DOCKERFILE` compose variable
-(see [Compose environment variables](#compose-environment-variables) below).
+The container runs as root (systemd); the services run as the Clearpath user,
+which has passwordless `sudo`. On start, the entrypoint runs
+`clearpath_robot install` against your `robot.yaml`, enables
+`clearpath-robot.service`, and masks `clearpath-shutdown.service` so stopping
+the container never powers the robot off.
 
-**Pull and run — Jazzy (default):**
+#### Running on a robot
+
+1. **Install Docker** (Engine plus Compose 2.24 or newer) on the robot
+   computer, enable it at boot (`sudo systemctl enable docker`), and clone this
+   repository.
+
+2. **Disable any native Clearpath services**, so they don't fight the container
+   for the hardware:
+
+   ```sh
+   systemctl list-unit-files 'clearpath-*'
+   sudo systemctl disable --now clearpath-robot.service
+   ```
+
+3. **Install the udev rules on the host.** The container shares the host's
+   `/dev`, but only the host's udev creates device links such as
+   `/dev/clearpath/*`, `/dev/microstrain_*`, and brings up `can0`/`can1`.
+   Copy the rules shipped in the image:
+
+   ```sh
+   docker run --rm --entrypoint sh -v /etc/udev/rules.d:/host-rules \
+     ghcr.io/clearpathrobotics/clearpath_docker:jazzy-robot-latest \
+     -c 'cp /lib/udev/rules.d/60-ros-*.rules /host-rules/'
+   sudo udevadm control --reload-rules && sudo udevadm trigger
+   ```
+
+   Use the `humble-robot-latest` tag on Humble.
+
+4. **Configure the host network** as for a native install, e.g. the
+   `192.168.131.1` address the computer uses to reach the MCU and Ethernet
+   sensors. The container uses the host network and doesn't change it.
+
+5. **Put `robot.yaml` in the setup directory**, `~/clearpath/` by default
+   (`SETUP_PATH_HOST` points elsewhere). The middleware, domain ID, and
+   namespace the services use come from `robot.yaml` (`system.ros2`), not from
+   the compose variables.
+
+6. **Start the robot:**
+
+   ```sh
+   # Jazzy
+   SETUP_PATH_HOST=$HOME/clearpath docker compose up -d robot
+
+   # Humble
+   ROS_DISTRO=humble SETUP_PATH_HOST=$HOME/clearpath docker compose up -d robot
+   ```
+
+   Put these variables in a `.env` file next to `compose.yaml` to avoid
+   retyping them.
+
+7. **Start it on boot** with a `compose.override.yaml`:
+
+   ```yaml
+   services:
+     robot:
+       restart: unless-stopped
+   ```
+
+**Checking status:**
 
 ```sh
-SETUP_PATH_HOST=$HOME/clearpath docker compose up -d robot
+docker compose ps robot                     # (healthy) once the MCU status is publishing
+docker compose logs -f robot                # entrypoint and systemd boot output
+docker compose exec robot systemctl list-units 'clearpath-*'
+docker compose exec robot journalctl -u clearpath-platform -f
 ```
 
-**Pull and run — Humble:**
+**After editing `robot.yaml`**, restart the container so the entrypoint
+regenerates the launch files: `docker compose restart robot`.
 
-```sh
-ROBOT_DOCKERFILE=docker/cpr-robot-humble.Dockerfile \
-  ROS_DISTRO=humble \
-  RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
-  SETUP_PATH_HOST=$HOME/clearpath \
-  docker compose up -d robot
-```
+**Updating:** `docker compose pull robot && docker compose up -d robot`.
+
+**Stopping:** `docker compose down`. The robot stays powered.
 
 **Exec into the container:**
 
@@ -244,14 +306,15 @@ docker exec -it --user administrator cpr-robot-humble bash
 
 Once inside the container, source the generated setup file before using any
 `ros2` commands. This file is produced by `clearpath_robot install` and sources
-the correct ROS distro overlay together with any workspace extensions:
+the correct ROS distro overlay together with any workspace extensions and the
+middleware settings from `robot.yaml`:
 
 ```sh
 source /etc/clearpath/setup.bash
 ```
 
 You can then use any ROS 2 CLI tool. The robot namespace (e.g. `a300_00000`)
-comes from `platform.id` in your `robot.yaml`:
+comes from `robot.yaml`:
 
 ```sh
 # List all active nodes
@@ -262,11 +325,16 @@ ros2 topic list
 
 # Echo odometry (replace <namespace> with your robot's namespace, e.g. a300_00000)
 ros2 topic echo /<namespace>/platform/odom/filtered
+```
 
 Source `/etc/clearpath/setup.bash` in every new shell; the container's default
 `~/.bashrc` does **not** source it automatically.
 
-> **Note (Humble only):** The MCU firmware requires FastDDS — set `RMW_IMPLEMENTATION=rmw_fastrtps_cpp` when running on Humble. CycloneDDS will not communicate with the robot hardware.
+> **Note (Humble only):** The MCU firmware requires FastDDS — keep `system.ros2.rmw_implementation` set to `rmw_fastrtps_cpp` in `robot.yaml` on Humble. CycloneDDS will not communicate with the robot hardware.
+
+If your host user isn't uid 1000, use `robot-local` instead of `robot` so files
+the services write into the setup directory are owned by you (see
+[Matching your host uid/gid](#matching-your-host-uidgid-non-1000-users)).
 
 ### NVIDIA GPU overlay — [compose.nvidia.yaml](compose.nvidia.yaml)
 
@@ -289,17 +357,25 @@ sudo systemctl restart docker
 xhost +local:
 
 # Sim + Viz
-SETUP_PATH_HOST=$HOME/clearpath ROS_DISTRO=jazzy docker compose -f compose-sim-viz.yaml -f compose.nvidia.yaml up
+SETUP_PATH_HOST=$HOME/clearpath ROS_DISTRO=jazzy docker compose -f compose.yaml -f compose.nvidia.yaml up sim viz
 
 # Sim + Nav2 + Viz
 SETUP_PATH_HOST=$HOME/clearpath ROS_DISTRO=jazzy docker compose -f compose-sim-viz-nav2.yaml -f compose.nvidia.yaml up
 ```
 
-### Supported ROS 2 distros
+### Supported platforms
 
-`humble`, `jazzy`, `lyrical`, `rolling`.
+**ROS 2 distros and container OS** (the Ubuntu release comes from the upstream
+`ros:<distro>-ros-base` image):
 
-### Supported architectures
+| ROS 2 distro | Container OS | Images |
+| --- | --- | --- |
+| `humble` | Ubuntu 22.04 (jammy) | all |
+| `jazzy` | Ubuntu 24.04 (noble) | all |
+| `lyrical` | Ubuntu 26.04 (resolute) | base, dev, ci |
+| `rolling` | Ubuntu 26.04 (resolute) | base, dev, ci |
+
+**Architectures:**
 
 | Image | amd64 | arm64 |
 | --- | --- | --- |
@@ -313,17 +389,37 @@ Multi-arch tags resolve to the host architecture automatically. The arm64
 base image does not add the Clearpath apt source, which has no arm64 Clearpath
 packages; `ros-<distro>-clearpath-robot` is not published for arm64 at all.
 
+**Host requirements:**
+
+- A Linux host matching the image architecture. Any distribution works; the
+  containers carry their own Ubuntu and ROS. The images are tested on an
+  Ubuntu 24.04 amd64 host.
+- Docker Engine with Compose 2.24 or newer (the compose files use `!reset`,
+  `!override`, and optional `depends_on`), and Buildx for `docker buildx bake`.
+- Host networking (`network_mode: host`), which needs Docker Engine on Linux.
+  Docker Desktop on macOS or Windows isn't supported.
+- For `sim` and `viz` with a GUI: an X11 or Xwayland display and
+  `xhost +local:`. `GAZEBO_HEADLESS=true` and foxglove-bridge need no display.
+- For GPU rendering: an NVIDIA driver and the NVIDIA Container Toolkit (see
+  [NVIDIA GPU overlay](#nvidia-gpu-overlay----composenvidiayaml)). Without it
+  Gazebo and RViz render on the CPU or through `/dev/dri`.
+- For `robot`: the robot computer, with cgroup v2 (systemd runs as PID 1 in
+  the container) and the host setup in [Running on a robot](#running-on-a-robot).
+
 ## Utility Scripts
 
-The images include utility scripts installed to `/usr/local/bin/`:
+The images include utility scripts from [scripts/](scripts/), installed to
+`/usr/local/bin/`:
 
 ### cpr-common.sh
 
 Common utilities and functions shared by Clearpath launch scripts. Includes:
 - `detect_namespace` - Auto-detect robot namespace from `robot.yaml`
-- `wait_for_sim_if_enabled` - Block until simulation is ready
-- `wait_for_service` / `wait_for_topic` - Wait for ROS 2 resources
-- `activate_node_direct` - Lifecycle node management
+- `have_namespace` - Warn and skip a step when no namespace was found
+- `wait_for_sim_if_enabled` - Block until `/clock` and odometry are publishing (`WAIT_FOR_SIM`)
+- `topic_publishing` / `wait_for_topic_publishing` - Check or wait for messages on a topic
+- `wait_for_service` - Wait for a ROS 2 service
+- `get_node_state` / `activate_node_direct` - Lifecycle node management
 - `log_robot_yaml` - Debug robot configuration
 
 Source this in scripts with:
@@ -383,90 +479,27 @@ docker pull ghcr.io/clearpathrobotics/clearpath_docker:jazzy-sim-latest
 
 ## Building locally
 
-Base image:
+[docker-bake.hcl](docker-bake.hcl) defines every image as a
+`<variant>-<distro>` target. Bake builds the parent chain from source (for
+example base → dev → sim) and tags the result `cpr-<variant>:<distro>`:
 
 ```sh
-docker build \
-  --build-arg ROS_DISTRO=jazzy \
-  -f docker/cpr-base.Dockerfile \
-  -t cpr-base:jazzy .
+docker buildx bake sim-jazzy        # cpr-sim:jazzy
+docker buildx bake ci-common-humble # cpr-ci-common:humble
+docker buildx bake nav2             # cpr-nav2:humble and cpr-nav2:jazzy
+docker buildx bake --print viz-jazzy  # show the resolved build without running it
 ```
 
-Dev image (consumes a base image via `CPR_BASE_IMAGE` / `CPR_BASE_TAG`):
+To build a single image on top of a published parent instead, pass the
+parent through `CPR_BASE_IMAGE` / `CPR_BASE_TAG`:
 
 ```sh
 docker build \
   --build-arg ROS_DISTRO=jazzy \
-  --build-arg CPR_BASE_IMAGE=cpr-base \
-  --build-arg CPR_BASE_TAG=jazzy \
-  -f docker/cpr-dev.Dockerfile \
-  -t cpr-dev:jazzy .
-```
-
-CI image (same pattern):
-
-```sh
-docker build \
-  --build-arg ROS_DISTRO=jazzy \
-  --build-arg CPR_BASE_IMAGE=cpr-base \
-  --build-arg CPR_BASE_TAG=jazzy \
-  -f docker/cpr-ci.Dockerfile \
-  -t cpr-ci:jazzy .
-```
-
-Common image (consumes a CI image via `CPR_BASE_IMAGE` / `CPR_BASE_TAG`):
-
-```sh
-docker build \
-  --build-arg ROS_DISTRO=jazzy \
-  --build-arg CPR_BASE_IMAGE=cpr-ci \
-  --build-arg CPR_BASE_TAG=jazzy \
-  -f docker/cpr-ci-common.Dockerfile \
-  -t cpr-ci-common:jazzy .
-```
-
-Robot image (consumes a CI image via `CPR_BASE_IMAGE` / `CPR_BASE_TAG`):
-
-```sh
-docker build \
-  --build-arg ROS_DISTRO=jazzy \
-  --build-arg CPR_BASE_IMAGE=cpr-ci \
-  --build-arg CPR_BASE_TAG=jazzy \
-  -f docker/cpr-ci-robot.Dockerfile \
-  -t cpr-ci-robot:jazzy .
-```
-
-Sim image (consumes a dev image via `CPR_BASE_IMAGE` / `CPR_BASE_TAG`):
-
-```sh
-docker build \
-  --build-arg ROS_DISTRO=jazzy \
-  --build-arg CPR_BASE_IMAGE=cpr-dev \
-  --build-arg CPR_BASE_TAG=jazzy \
+  --build-arg CPR_BASE_IMAGE=ghcr.io/clearpathrobotics/clearpath_docker \
+  --build-arg CPR_BASE_TAG=jazzy-dev-latest \
   -f docker/cpr-sim.Dockerfile \
   -t cpr-sim:jazzy .
-```
-
-Nav2 demos image (consumes a dev image via `CPR_BASE_IMAGE` / `CPR_BASE_TAG`):
-
-```sh
-docker build \
-  --build-arg ROS_DISTRO=jazzy \
-  --build-arg CPR_BASE_IMAGE=cpr-dev \
-  --build-arg CPR_BASE_TAG=jazzy \
-  -f cpr-nav2.Dockerfile \
-  -t cpr-nav2:jazzy .
-```
-
-Foxglove Bridge image (consumes a base image via `CPR_BASE_IMAGE` / `CPR_BASE_TAG`):
-
-```sh
-docker build \
-  --build-arg ROS_DISTRO=jazzy \
-  --build-arg CPR_BASE_IMAGE=cpr-base \
-  --build-arg CPR_BASE_TAG=jazzy \
-  -f docker/cpr-foxglove-bridge.Dockerfile \
-  -t cpr-foxglove-bridge:jazzy .
 ```
 
 Run the sim image with the default setup path:
@@ -486,25 +519,24 @@ docker run --rm --network host \
 
 ## Using the dev image with a `ros2_ws`
 
-The dev image expects you to mount your ROS 2 workspace at
-`/home/robot/ros2_ws` and run as the `robot` user. A typical loop:
+The dev image expects you to mount your ROS 2 workspace at `/ros2_ws` and
+runs as its non-root user (`administrator` on Humble, `robot` otherwise).
+A typical loop:
 
 ```sh
 mkdir -p ~/ros2_ws/src ~/.clearpath_docker_history
 
 docker run -it --rm \
   --name cpr-dev \
-  --user robot \
   --network host \
-  -v ~/ros2_ws:/home/robot/ros2_ws \
+  -v ~/ros2_ws:/ros2_ws \
   -v ~/.clearpath_docker_history:/commandhistory \
-  -w /home/robot/ros2_ws \
   ghcr.io/clearpathrobotics/clearpath_docker:jazzy-dev-latest \
   bash
 ```
 
 Inside the container, `/opt/ros/<distro>/setup.bash` is sourced automatically
-by the `robot` user's `.bashrc`. Resolve dependencies and build with `colcon`:
+by the user's `.bashrc`. Resolve dependencies and build with `colcon`:
 
 ```sh
 sudo apt-get update
@@ -540,6 +572,10 @@ Run simulation, Nav2 demos, and visualization together:
 xhost +local:
 SETUP_PATH_HOST=$HOME/clearpath ROS_DISTRO=jazzy docker compose up sim nav2 viz
 ```
+
+`nav2` and `viz` wait for `sim` to be healthy only when it's started in the
+same command. Started on their own (for example against a real robot), they
+don't start the sim and launch straight away.
 
 Or use the dedicated compose file:
 
@@ -605,61 +641,98 @@ copy [compose.override.yaml.example](compose.override.yaml.example) to
 
 ### Compose environment variables
 
-All variables can be passed on the command line or set in a `.env` file.
+All variables can be passed on the command line or set in a `.env` file. The
+`*-local` services take the same variables as the service they rebuild.
+
+**Common**
 
 | Variable | Default | Services | Description |
 | --- | --- | --- | --- |
 | `ROS_DISTRO` | `jazzy` | all | ROS 2 distribution (`humble`, `jazzy`, `lyrical`, `rolling`) |
-| `ROBOT_DOCKERFILE` | `cpr-robot.Dockerfile` | robot | Dockerfile for the robot service; use `cpr-robot-humble.Dockerfile` for Humble |
-| `CLEARPATH_USER` | `robot` | robot | User that runs clearpath services (`administrator` for Humble) |
-| `SETUP_PATH_HOST` | `$HOME/clearpath/` | robot, sim, nav2, viz | **Host-side** path to the directory containing `robot.yaml`; mounted into the container at `SETUP_PATH` |
-| `SETUP_PATH` | `/etc/clearpath` | sim, nav2, viz | **Container-side** mount point for the setup directory (the other end of `SETUP_PATH_HOST`) |
-| `ROS2_WS` | `~/ros2_ws` | dev, dev-local | Host workspace path mounted into the container |
-| `USER_UID` | `1000` | dev-local | Host user UID — used to match file ownership in the mounted workspace |
-| `USER_GID` | `1000` | dev-local | Host user GID — used to match file ownership in the mounted workspace |
-| `RMW_IMPLEMENTATION` | `rmw_cyclonedds_cpp` | sim, nav2, viz, robot | ROS 2 middleware — Humble robot containers must use `rmw_fastrtps_cpp` (firmware requirement) |
-| `ROS_AUTOMATIC_DISCOVERY_RANGE` | `LOCALHOST` | sim, nav2, viz | DDS participant discovery scope |
+| `SETUP_PATH_HOST` | `$HOME/clearpath/` | sim, nav2, viz, robot | **Host-side** path to the directory containing `robot.yaml`; mounted into the container at `SETUP_PATH` |
+| `SETUP_PATH` | `/etc/clearpath` | sim, nav2, viz, robot | **Container-side** mount point for the setup directory (the other end of `SETUP_PATH_HOST`) |
+| `RMW_IMPLEMENTATION` | `rmw_cyclonedds_cpp` | sim, nav2, viz, robot | ROS 2 middleware. On `robot` it only affects `docker exec` shells; the robot services use `robot.yaml` |
+| `ROS_AUTOMATIC_DISCOVERY_RANGE` | `LOCALHOST` | sim, nav2, viz, robot | DDS participant discovery scope |
 | `ROS_DOMAIN_ID` | `0` | sim, nav2, viz, robot | ROS domain ID |
-| `CYCLONEDDS_URI` | (inline XML) | sim, nav2, viz, robot | CycloneDDS configuration XML. The default sets `ParticipantIndex` to `auto` with `MaxAutoParticipantIndex` 120, which `LOCALHOST` discovery needs for more than 32 ROS processes. Host-side ROS processes, such as the `ros2` CLI, must use the same setting to discover the containers. |
-| `DISPLAY` | `:0` | sim, viz | X11 display target |
-| `USE_SIM_TIME` | `true` | nav2, viz | Use `/clock` from Gazebo instead of wall time |
-| `CLEARPATH_VIZ_CONFIG` | `robot` | viz | RViz config profile (`robot` or `navigation`) |
+| `CYCLONEDDS_CONFIG` | `./config/cyclonedds.xml` | sim, nav2, viz, robot | Host-side CycloneDDS profile mounted at `/etc/cpr/cyclonedds.xml`. The default [config/cyclonedds.xml](config/cyclonedds.xml) sets `ParticipantIndex` to `auto` with `MaxAutoParticipantIndex` 120, which `LOCALHOST` discovery needs for more than 32 ROS processes. Host-side ROS processes, such as the `ros2` CLI, must use the same profile (`export CYCLONEDDS_URI=file://$PWD/config/cyclonedds.xml`) to discover the containers. |
+| `CYCLONEDDS_URI` | `file:///etc/cpr/cyclonedds.xml` | sim, nav2, viz, robot | Replaces the profile entirely (a container path or inline XML) |
 | `ROBOT_NAMESPACE` | _(auto-detect)_ | nav2, viz | Override the robot namespace (normally read from `robot.yaml`) |
-| `WAIT_FOR_SIM` | `false` | nav2 | Wait for `/clock` before starting Nav2 |
-| `WAIT_FOR_TIMEOUT_SEC` | `120` | nav2, viz | Seconds to wait for sim topics when `WAIT_FOR_SIM=true` |
-| `SCAN_TOPIC` | _(unset)_ | nav2 | Override the lidar scan topic (useful for 3D lidar) |
-| `NAV2_LAUNCH_FILE` | `nav2.launch.py` | nav2 | Nav2 launch file; use `slam.launch.py` for SLAM-only mode |
-| `NAV2_ENABLE_SLAM` | `false` | nav2 | Run `slam.launch.py` alongside `nav2.launch.py` |
-| `NAV2_SLAM_SYNC` | `false` | nav2 | Run SLAM in synchronous mode |
-| `AUTO_NAV2_STARTUP` | `true` | nav2 | Auto-call the lifecycle manager startup service on container start |
-| `NAV2_STARTUP_TIMEOUT_S` | `120` | nav2 | Seconds to wait for the lifecycle manager service to appear |
-| `NAV2_SERVICE_CALL_TIMEOUT_S` | `8` | nav2 | Per-call timeout for lifecycle service calls |
-| `NAV2_ACTIVE_WAIT_TIMEOUT_S` | `60` | nav2 | Seconds to wait for all navigation nodes to reach active state |
-| `NAV2_TOPIC_WAIT_TIMEOUT_S` | `120` | nav2 | Seconds to wait for odom/TF topics before Nav2 bringup |
-| `GAZEBO_STARTUP_TIMEOUT` | `120` | sim | Seconds to wait for the Gazebo process to start |
-| `GAZEBO_MAX_RESTARTS` | `3` | sim | Max times the Gazebo watchdog will restart Gazebo on failure |
-| `GAZEBO_HEADLESS` | `false` | sim | Run Gazebo server only (no GUI, headless rendering); no X11 needed |
-| `FOXGLOVE_BRIDGE_PORT` | `8765` | foxglove-bridge | WebSocket port for `foxglove_bridge` |
+| `USE_SIM_TIME` | `true` | nav2, viz | Use `/clock` from Gazebo instead of wall time |
+| `WAIT_FOR_SIM` | nav2: `false`, foxglove-bridge: `true` | nav2, foxglove-bridge | Wait for `/clock` and odometry before starting |
+| `WAIT_FOR_TIMEOUT_SEC` | `120` | nav2, foxglove-bridge | Seconds to wait for sim topics when `WAIT_FOR_SIM=true` |
+| `DISPLAY` | `:0` | sim, viz | X11 display target |
+| `USER_UID` | `1000` | *-local | Host user UID — used to match file ownership in mounted directories |
+| `USER_GID` | `1000` | *-local | Host user GID — used to match file ownership in mounted directories |
+
+**dev**
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `ROS2_WS` | `~/ros2_ws` | Host workspace path mounted at `/ros2_ws` |
+
+**sim**
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `GAZEBO_STARTUP_TIMEOUT` | `120` | Seconds to wait for `/clock` before the watchdog restarts Gazebo |
+| `GAZEBO_MAX_RESTARTS` | `3` | Max times the Gazebo watchdog will restart Gazebo on failure |
+| `GAZEBO_HEADLESS` | `false` | Run Gazebo server only (no GUI, headless rendering); no X11 needed |
+
+**nav2**
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `NAV2_LAUNCH_FILE` | `nav2.launch.py` | Nav2 launch file; use `slam.launch.py` for SLAM-only mode |
+| `NAV2_ENABLE_SLAM` | `false` | Run `slam.launch.py` alongside `nav2.launch.py` |
+| `NAV2_SLAM_SYNC` | `false` | Run SLAM in synchronous mode |
+| `SCAN_TOPIC` | _(unset)_ | Override the lidar scan topic (useful for 3D lidar) |
+| `AUTO_NAV2_STARTUP` | `true` | Auto-call the lifecycle manager startup service on container start |
+| `NAV2_STARTUP_TIMEOUT_S` | `120` | Seconds to wait for the lifecycle manager service to appear |
+| `NAV2_SERVICE_CALL_TIMEOUT_S` | `8` | Per-call timeout for lifecycle service calls |
+| `NAV2_ACTIVE_WAIT_TIMEOUT_S` | `60` | Seconds to wait for all navigation nodes to reach active state |
+| `NAV2_TOPIC_WAIT_TIMEOUT_S` | `120` | Seconds to wait for odom/TF topics before Nav2 bringup |
+
+**viz**
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `CLEARPATH_VIZ_CONFIG` | `robot` | RViz config profile (`robot` or `navigation`) |
+
+**foxglove-bridge** (`docker run -e`; not a compose service)
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `FOXGLOVE_BRIDGE_PORT` | `8765` | WebSocket port for `foxglove_bridge` |
+
+The `robot` service takes only common variables; its ROS settings come from
+`robot.yaml` (see [Running on a robot](#running-on-a-robot)).
 
 #### Matching your host uid/gid (non-1000 users)
 
-The published dev image bakes the `robot` user at uid/gid 1000, so files it
-creates in the mounted workspace are owned by uid 1000 on the host. If
-your host user is not 1000, use the `dev-local` service in
-[compose.yaml](compose.yaml) instead — it rebuilds `cpr-dev.Dockerfile`
-locally with `USER_UID` / `USER_GID` build args:
+The published images create their user (`robot`, or `administrator` on
+Humble) at uid/gid 1000, so files they create in mounted directories are
+owned by uid 1000 on the host. If your host user is not 1000, use the
+`*-local` services in [compose.yaml](compose.yaml) (`dev-local`, `sim-local`,
+`nav2-local`, `viz-local`, `robot-local`). They rebuild the published image with
+[docker/cpr-local-user.Dockerfile](docker/cpr-local-user.Dockerfile), which
+re-numbers that user to your `USER_UID` / `USER_GID`:
 
 ```sh
 USER_UID=$(id -u) USER_GID=$(id -g) \
   docker compose up -d --build dev-local
 docker compose exec dev-local bash
+
+USER_UID=$(id -u) USER_GID=$(id -g) \
+  docker compose up --build sim-local nav2-local viz-local
 ```
 
-Set `USER_UID` / `USER_GID` in `.env` to avoid re-typing them.
+Run the local services together rather than mixing them with the non-local
+ones: DDS shared memory doesn't deliver data between containers running as
+different uids. Set `USER_UID` / `USER_GID` in `.env` to avoid re-typing them.
 
 ### Hardware access (USB, serial, network)
 
-The dev image runs as the non-root `robot` user (uid/gid 1000). To talk to
+The dev image runs as a non-root user (uid/gid 1000). To talk to
 host hardware you usually need to pass the device through *and* match the
 host group that owns the device node.
 
@@ -703,8 +776,11 @@ waits for the dev build and reuses its tag.
 
 The base and dev images are built natively on `ubuntu-latest` (amd64) and
 `ubuntu-24.04-arm` (arm64) runners, pushed by digest, and merged into a single
-multi-arch tag by the `build-merge` and `dev-merge` jobs. Downstream images
-wait for the merge jobs.
+multi-arch tag. Downstream images wait for the merge.
+
+Each image is a job in `docker-publish.yml` that calls the reusable
+[.github/workflows/build-image.yml](.github/workflows/build-image.yml) with its
+Dockerfile, parent variant, and distro list.
 
 ## License
 
