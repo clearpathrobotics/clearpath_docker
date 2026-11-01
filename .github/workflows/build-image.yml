@@ -113,6 +113,13 @@ jobs:
           tags: ${{ !inputs.multiarch && steps.meta.outputs.tags || '' }}
           outputs: ${{ inputs.multiarch && format('type=image,name=ghcr.io/{0},push-by-digest=true,name-canonical=true,push=true', github.repository) || '' }}
 
+      - name: Smoke test ${{ inputs.variant }} image
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}@${{ steps.build.outputs.digest }}
+          VARIANT: ${{ inputs.variant }}
+          DISTRO: ${{ matrix.ros_distro }}
+        run: test/smoke-test.sh "$IMAGE" "$VARIANT" "$DISTRO"
+
       - name: Export digest
         if: inputs.multiarch
         run: |
