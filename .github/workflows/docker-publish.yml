@@ -117,3 +117,36 @@ jobs:
       parent: base
       dockerfile: docker/cpr-foxglove-bridge.Dockerfile
       distros: '["humble", "jazzy"]'
+
+  stack-test:
+    needs: [sim, nav2]
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ros_distro: [humble, jazzy]
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run sim + nav2 stack test
+        env:
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.number }}
+          DISTRO: ${{ matrix.ros_distro }}
+          REPO: ghcr.io/${{ github.repository }}
+        run: |
+          case "$EVENT" in
+            pull_request) suffix="pr-$PR" ;;
+            schedule) suffix=nightly ;;
+            *) suffix=latest ;;
+          esac
+          test/stack-test.sh "$DISTRO" "$REPO:$DISTRO-sim-$suffix" "$REPO:$DISTRO-nav2-$suffix"
