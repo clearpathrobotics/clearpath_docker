@@ -26,4 +26,5 @@ repos:
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12
     hooks:
-      - id: actionlint
+      # Docker image bundles shellcheck, so run: scripts are checked on every host
+      - id: actionlint-docker
