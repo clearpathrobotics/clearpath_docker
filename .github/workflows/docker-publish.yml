@@ -90,6 +90,7 @@ jobs:
       parent: dev
       dockerfile: docker/cpr-sim.Dockerfile
       distros: '["humble", "jazzy"]'
+      multiarch: true
 
   nav2:
     needs: dev
@@ -99,6 +100,7 @@ jobs:
       parent: dev
       dockerfile: docker/cpr-nav2.Dockerfile
       distros: '["humble", "jazzy"]'
+      multiarch: true
 
   viz:
     needs: dev
@@ -108,6 +110,7 @@ jobs:
       parent: dev
       dockerfile: docker/cpr-viz.Dockerfile
       distros: '["humble", "jazzy"]'
+      multiarch: true
 
   foxglove-bridge:
     needs: base
@@ -117,6 +120,7 @@ jobs:
       parent: base
       dockerfile: docker/cpr-foxglove-bridge.Dockerfile
       distros: '["humble", "jazzy"]'
+      multiarch: true
 
   stack-test:
     needs: [sim, nav2]

@@ -382,12 +382,14 @@ SETUP_PATH_HOST=$HOME/clearpath ROS_DISTRO=jazzy docker compose -f compose-sim-v
 | base | yes | yes |
 | dev | yes | yes |
 | ci, ci-common, ci-robot | yes | no |
-| sim, nav2, viz, foxglove-bridge | yes | no |
+| sim, nav2, viz, foxglove-bridge | yes | yes |
 | robot | yes | no |
 
 Multi-arch tags resolve to the host architecture automatically. The arm64
 base image does not add the Clearpath apt source, which has no arm64 Clearpath
 packages; `ros-<distro>-clearpath-robot` is not published for arm64 at all.
+The arm64 sim, nav2, viz, and foxglove-bridge images install Clearpath packages
+from the ROS apt repo instead, so their versions can lag the amd64 images.
 
 **Host requirements:**
 
@@ -774,7 +776,7 @@ produced for the same ref; the common and robot (CI and runtime) builds wait
 for the CI and base builds respectively and reuse their tags; the sim build
 waits for the dev build and reuses its tag.
 
-The base and dev images are built natively on `ubuntu-latest` (amd64) and
+The base, dev, sim, nav2, viz, and foxglove-bridge images are built natively on `ubuntu-latest` (amd64) and
 `ubuntu-24.04-arm` (arm64) runners, pushed by digest, and merged into a single
 multi-arch tag. Downstream images wait for the merge.
 
