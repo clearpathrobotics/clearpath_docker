@@ -408,6 +408,42 @@ from the ROS apt repo instead, so their versions can lag the amd64 images.
 - For `robot`: the robot computer, with cgroup v2 (systemd runs as PID 1 in
   the container) and the host setup in [Running on a robot](#running-on-a-robot).
 
+### macOS (experimental)
+
+Untested. Apple's [`container`](https://github.com/apple/container) CLI (Apple
+silicon, macOS 26) runs each container in its own Linux VM, so one container
+can run Docker Engine and the usual Compose stack inside that VM. Host
+networking and shared memory then work as on Linux. There is no display or GPU,
+so run the sim headless and view it through foxglove-bridge.
+
+First install `container` from its
+[releases page](https://github.com/apple/container/releases) and start it with
+`container system start`, which also offers to install the default Linux kernel
+(see [Get started](https://github.com/apple/container#get-started)).
+
+```sh
+container run -d --name cpr-docker --cap-add ALL --cpus 6 --memory 12G \
+  -v cpr-docker-data:/var/lib/docker \
+  -v "$PWD":/repo -v "$HOME/clearpath":/clearpath \
+  -p 127.0.0.1:8765:8765 docker:dind
+
+container exec -it cpr-docker sh -c '
+  cd /repo
+  export SETUP_PATH_HOST=/clearpath GAZEBO_HEADLESS=true NAV2_ENABLE_SLAM=true
+  docker compose up -d sim nav2
+  docker run -d --name cpr-foxglove-bridge --network host \
+    -e RMW_IMPLEMENTATION=rmw_cyclonedds_cpp -e ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+    -v /clearpath:/etc/clearpath:ro \
+    ghcr.io/clearpathrobotics/clearpath_docker:jazzy-foxglove-bridge-latest'
+# Lichtblick or Foxglove -> Foxglove WebSocket -> ws://localhost:8765
+
+container delete --force cpr-docker
+```
+
+`docker:dind` needs a kernel with overlayfs, iptables, and cgroup v2; if the
+daemon doesn't start, try `container machine create ubuntu:24.04` and install
+Docker in it instead.
+
 ## Utility Scripts
 
 The images include utility scripts from [scripts/](scripts/), installed to
