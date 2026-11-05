@@ -4,6 +4,7 @@ set -euo pipefail
 # shellcheck source=cpr-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/cpr-common.sh"
 
+log_env ROBOT_NAMESPACE USE_SIM_TIME CLEARPATH_VIZ_CONFIG DISPLAY
 log_robot_yaml
 namespace="$(detect_namespace)"
 namespace="${namespace:-a300_00000}"
@@ -23,13 +24,10 @@ case "$viz_config" in
     ;;
 esac
 
-namespace="$(detect_namespace)"
-tf_topic="/${namespace}/tf"
-description_topic="/${namespace}/robot_description"
+echo "Waiting for robot topics before starting RViz..."
+for topic in "/${namespace}/robot_description" "/${namespace}/tf"; do
+  wait_for_topic_publishing "${topic}" 45 || echo "Warning: ${topic} not publishing yet" >&2
+done
 
-echo "Waiting for simulation topics before starting RViz..."
-wait_for_topic "$description_topic" 45 || echo "Warning: ${description_topic} not found yet" >&2
-wait_for_topic "$tf_topic" 45 || echo "Warning: ${tf_topic} not found yet" >&2
-
-echo "Launching clearpath visualization config '$viz_config' for namespace: ${namespace:-unknown}"
+echo "Launching clearpath visualization config '$viz_config' for namespace: ${namespace}"
 exec ros2 launch clearpath_viz "$launch_file" "namespace:=${namespace}" "use_sim_time:=${use_sim_time}" "$@"

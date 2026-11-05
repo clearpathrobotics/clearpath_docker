@@ -13,6 +13,7 @@ alias cs='source install/setup.bash'
 
 # Source workspace overlay if it exists
 if [ -f /colcon_ws/install/setup.bash ]; then
+    # shellcheck source=/dev/null
     source /colcon_ws/install/setup.bash
 fi
 

@@ -7,7 +7,6 @@
 #   docker compose up nav2                # Launch Nav2 demos only
 #   docker compose up viz                 # Launch visualization only
 #   docker compose up sim nav2 viz        # Launch simulation + Nav2 + visualization
-#   docker compose -f compose-sim-viz.yaml up  # Launch sim + viz together
 #   docker compose -f compose-sim-viz-nav2.yaml up  # Launch sim + nav2 + viz together
 #
 # Override knobs (set in a .env file or on the command line):
@@ -19,29 +18,31 @@
 #                     (default: $HOME/clearpath/)
 #   USE_SIM_TIME - true/false for Nav2 demos in simulation (default: true)
 #   SCAN_TOPIC   - optional lidar topic override for 3D lidar setups
+#   CYCLONEDDS_CONFIG - host CycloneDDS profile (default: ./config/cyclonedds.xml)
 #
 # For host-specific tweaks (USB devices, extra mounts, etc.), create a
 # compose.override.yaml — see compose.override.yaml.example.
+#
+# Healthchecks come from the images (scripts/cpr-healthcheck.sh).
 
 services:
   dev:
     image: ghcr.io/clearpathrobotics/clearpath_docker:${ROS_DISTRO:-jazzy}-dev-latest
     container_name: cpr-dev-${ROS_DISTRO:-jazzy}
-    user: robot
     network_mode: host
-    working_dir: /home/robot/ros2_ws
+    working_dir: /ros2_ws
     volumes:
-      - ${ROS2_WS:-~/ros2_ws}:/home/robot/ros2_ws
+      - ${ROS2_WS:-~/ros2_ws}:/ros2_ws
       - ${HOME}/.clearpath_docker_history:/commandhistory
     stdin_open: true
     tty: true
     command: bash
 
-  # Opt-in: rebuild the dev image locally with the host user's uid/gid so
-  # files created in the mounted workspace are owned by you (instead of
-  # uid 1000). Use this if your host user is not uid/gid 1000.
+  # *-local services: the same images rebuilt to run as your host uid/gid, so
+  # mounted files are owned by you. Run all local containers together; DDS shared
+  # memory doesn't pass data between different uids.
   #
-  #   docker compose up -d --build dev-local
+  #   USER_UID=$(id -u) USER_GID=$(id -g) docker compose up -d --build dev-local
   #   docker compose exec dev-local bash
   dev-local:
     extends:
@@ -50,55 +51,42 @@ services:
     container_name: cpr-dev-${ROS_DISTRO:-jazzy}-local
     build:
       context: .
-      dockerfile: cpr-dev.Dockerfile
+      dockerfile: docker/cpr-local-user.Dockerfile
       args:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
         CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
-        CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-latest
+        CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-dev-latest
         USER_UID: ${USER_UID:-1000}
         USER_GID: ${USER_GID:-1000}
 
   sim:
     image: ghcr.io/clearpathrobotics/clearpath_docker:${ROS_DISTRO:-jazzy}-sim-latest
     container_name: cpr-sim-${ROS_DISTRO:-jazzy}
-    user: robot
+    # Only started when named, so `up nav2` / `up viz` alone don't pull in the sim
+    profiles: [sim]
     network_mode: host
     ipc: host
     environment:
       SETUP_PATH: ${SETUP_PATH:-/etc/clearpath}
       DISPLAY: ${DISPLAY:-:0}
+      XAUTHORITY: /tmp/.Xauthority
       GAZEBO_STARTUP_TIMEOUT: ${GAZEBO_STARTUP_TIMEOUT:-120}
       GAZEBO_MAX_RESTARTS: ${GAZEBO_MAX_RESTARTS:-3}
       GAZEBO_HEADLESS: ${GAZEBO_HEADLESS:-false}
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>120</MaxAutoParticipantIndex></Discovery></Domain></CycloneDDS>}'
+      CYCLONEDDS_URI: ${CYCLONEDDS_URI:-file:///etc/cpr/cyclonedds.xml}
     volumes:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/:rw  # rw: sim generates URDF, SRDF, configs
+      - ${CYCLONEDDS_CONFIG:-./config/cyclonedds.xml}:/etc/cpr/cyclonedds.xml:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ${HOME}/.Xauthority:/home/robot/.Xauthority:ro
-    healthcheck:
-      test:
-        - "CMD"
-        - "bash"
-        - "-c"
-        - >-
-          source /opt/ros/${ROS_DISTRO:-jazzy}/setup.bash &&
-          timeout 8 ros2 topic echo /clock --once >/dev/null 2>&1 &&
-          ros2 topic list --no-daemon 2>/dev/null | grep -qE '/[^/]+/platform/odom/filtered$'
-      interval: 10s
-      timeout: 10s
-      retries: 24
-      start_period: 120s
+      - ${HOME}/.Xauthority:/tmp/.Xauthority:ro
+      - gz_fuel_cache:/var/cache/gz/fuel
     stdin_open: true
     tty: true
 
-  # Opt-in: rebuild the sim image locally with the host user's uid/gid so
-  # files created in the mounted SETUP_PATH are owned by you (instead of
-  # uid 1000). Use this if your host user is not uid/gid 1000.
-  #
-  #   SETUP_PATH_HOST=~/clearpath docker compose up sim-local
+  #   USER_UID=$(id -u) USER_GID=$(id -g) docker compose up --build sim-local nav2-local viz-local
   sim-local:
     extends:
       service: sim
@@ -106,25 +94,27 @@ services:
     container_name: cpr-sim-${ROS_DISTRO:-jazzy}-local
     build:
       context: .
-      dockerfile: cpr-sim-local.Dockerfile
+      dockerfile: docker/cpr-local-user.Dockerfile
       args:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
         CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
         CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-sim-latest
         USER_UID: ${USER_UID:-1000}
         USER_GID: ${USER_GID:-1000}
+    volumes:
+      # Separate from sim's cache, which is owned by uid 1000
+      - gz_fuel_cache_local:/var/cache/gz/fuel
 
   nav2:
-    image: cpr-nav2:${ROS_DISTRO:-jazzy}-local
+    image: cpr-nav2:${ROS_DISTRO:-jazzy}
     container_name: cpr-nav2-${ROS_DISTRO:-jazzy}
     build:
       context: .
-      dockerfile: cpr-nav2.Dockerfile
+      dockerfile: docker/cpr-nav2.Dockerfile
       args:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
         CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
         CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-dev-latest
-    user: robot
     network_mode: host
     environment:
       SETUP_PATH: ${SETUP_PATH:-/etc/clearpath}
@@ -136,6 +126,7 @@ services:
       NAV2_LAUNCH_FILE: ${NAV2_LAUNCH_FILE:-nav2.launch.py}
       NAV2_ENABLE_SLAM: ${NAV2_ENABLE_SLAM:-false}
       NAV2_SLAM_SYNC: ${NAV2_SLAM_SYNC:-false}
+      AUTO_NAV2_STARTUP: ${AUTO_NAV2_STARTUP:-true}
       NAV2_STARTUP_TIMEOUT_S: ${NAV2_STARTUP_TIMEOUT_S:-120}
       NAV2_SERVICE_CALL_TIMEOUT_S: ${NAV2_SERVICE_CALL_TIMEOUT_S:-8}
       NAV2_ACTIVE_WAIT_TIMEOUT_S: ${NAV2_ACTIVE_WAIT_TIMEOUT_S:-60}
@@ -143,32 +134,40 @@ services:
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>120</MaxAutoParticipantIndex></Discovery></Domain></CycloneDDS>}'
+      CYCLONEDDS_URI: ${CYCLONEDDS_URI:-file:///etc/cpr/cyclonedds.xml}
     volumes:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/:ro  # ro: nav2 only reads config
-    healthcheck:
-      test:
-        - "CMD"
-        - "bash"
-        - "-c"
-        - >-
-          source /opt/ros/${ROS_DISTRO:-jazzy}/setup.bash &&
-          ros2 node list --no-daemon 2>/dev/null | grep -qE '/[^/]+/bt_navigator$' &&
-          ros2 action list --no-daemon 2>/dev/null | grep -qE '/[^/]+/navigate_to_pose$'
-      interval: 10s
-      timeout: 10s
-      retries: 24
-      start_period: 150s
+      - ${CYCLONEDDS_CONFIG:-./config/cyclonedds.xml}:/etc/cpr/cyclonedds.xml:ro
     depends_on:
+      # Waits for the sim only if it's started in the same command
       sim:
         condition: service_healthy
+        required: false
     stdin_open: true
     tty: true
+
+  nav2-local:
+    extends:
+      service: nav2
+    image: cpr-nav2:${ROS_DISTRO:-jazzy}-local
+    container_name: cpr-nav2-${ROS_DISTRO:-jazzy}-local
+    build: !override
+      context: .
+      dockerfile: docker/cpr-local-user.Dockerfile
+      args:
+        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+        CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
+        CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-nav2-latest
+        USER_UID: ${USER_UID:-1000}
+        USER_GID: ${USER_GID:-1000}
+    depends_on: !override
+      sim-local:
+        condition: service_healthy
+        required: false
 
   viz:
     image: ghcr.io/clearpathrobotics/clearpath_docker:${ROS_DISTRO:-jazzy}-viz-latest
     container_name: cpr-viz-${ROS_DISTRO:-jazzy}
-    user: robot
     network_mode: host
     devices:
       - /dev/dri:/dev/dri
@@ -176,6 +175,7 @@ services:
     environment:
       SETUP_PATH: ${SETUP_PATH:-/etc/clearpath}
       DISPLAY: ${DISPLAY:-:0}
+      XAUTHORITY: /tmp/.Xauthority
       ROBOT_NAMESPACE: ${ROBOT_NAMESPACE:-}
       USE_SIM_TIME: ${USE_SIM_TIME:-true}
       WAIT_FOR_TIMEOUT_SEC: ${WAIT_FOR_TIMEOUT_SEC:-120}
@@ -183,34 +183,45 @@ services:
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>120</MaxAutoParticipantIndex></Discovery></Domain></CycloneDDS>}'
+      CYCLONEDDS_URI: ${CYCLONEDDS_URI:-file:///etc/cpr/cyclonedds.xml}
     volumes:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/:ro  # ro: viz only reads config
+      - ${CYCLONEDDS_CONFIG:-./config/cyclonedds.xml}:/etc/cpr/cyclonedds.xml:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ${HOME}/.Xauthority:/home/robot/.Xauthority:ro
-    healthcheck:
-      test:
-        - "CMD"
-        - "bash"
-        - "-c"
-        - "pgrep -f rviz2 >/dev/null"
-      interval: 10s
-      timeout: 10s
-      retries: 24
-      start_period: 60s
+      - ${HOME}/.Xauthority:/tmp/.Xauthority:ro
     depends_on:
       sim:
         condition: service_healthy
+        required: false
     stdin_open: true
     tty: true
+
+  viz-local:
+    extends:
+      service: viz
+    image: cpr-viz:${ROS_DISTRO:-jazzy}-local
+    container_name: cpr-viz-${ROS_DISTRO:-jazzy}-local
+    build:
+      context: .
+      dockerfile: docker/cpr-local-user.Dockerfile
+      args:
+        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+        CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
+        CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-viz-latest
+        USER_UID: ${USER_UID:-1000}
+        USER_GID: ${USER_GID:-1000}
+    depends_on: !override
+      sim-local:
+        condition: service_healthy
+        required: false
 
   # ─── Robot (real hardware) ────────────────────────────────────────────
   # Controls the physical robot via USB, Ethernet, and CAN bus.
   # Requires: SETUP_PATH_HOST pointing to a directory containing robot.yaml.
   #
-  # Usage:
-  #   SETUP_PATH_HOST=$HOME/clearpath docker compose up robot
-  #   ROS_DISTRO=humble RMW_IMPLEMENTATION=rmw_fastrtps_cpp SETUP_PATH_HOST=$HOME/clearpath docker compose up robot
+  # Usage (see README "Running on a robot" for host setup):
+  #   SETUP_PATH_HOST=$HOME/clearpath docker compose up -d robot
+  #   ROS_DISTRO=humble SETUP_PATH_HOST=$HOME/clearpath docker compose up -d robot
   robot:
     image: ghcr.io/clearpathrobotics/clearpath_docker:${ROS_DISTRO:-jazzy}-robot-latest
     container_name: cpr-robot-${ROS_DISTRO:-jazzy}
@@ -221,13 +232,14 @@ services:
       container: docker
       SETUP_PATH: ${SETUP_PATH:-/etc/clearpath}
       ROS_DISTRO: ${ROS_DISTRO:-jazzy}
-      # Humble robot firmware requires FastDDS — set RMW_IMPLEMENTATION=rmw_fastrtps_cpp when using ROS_DISTRO=humble.
+      # For docker exec shells only; the robot services take these from robot.yaml
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      CYCLONEDDS_URI: '${CYCLONEDDS_URI:-<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>120</MaxAutoParticipantIndex></Discovery></Domain></CycloneDDS>}'
+      CYCLONEDDS_URI: ${CYCLONEDDS_URI:-file:///etc/cpr/cyclonedds.xml}
     volumes:
-      - ${SETUP_PATH_HOST:?SETUP_PATH_HOST must be set to the directory containing robot.yaml}:/etc/clearpath/  # rw (default): robot may write logs/updates
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/  # rw (default): robot may write logs/updates
+      - ${CYCLONEDDS_CONFIG:-./config/cyclonedds.xml}:/etc/cpr/cyclonedds.xml:ro
       - /dev:/dev
       - /run/udev:/run/udev:ro
       - /sys/fs/cgroup:/sys/fs/cgroup:rw
@@ -238,26 +250,13 @@ services:
     tmpfs:
       - /run
       - /run/lock
-    healthcheck:
-      test:
-        - "CMD"
-        - "bash"
-        - "-c"
-        - >-
-          source /opt/ros/${ROS_DISTRO:-jazzy}/setup.bash &&
-          ros2 node list --no-daemon 2>/dev/null | grep -qE "platform"
-      interval: 10s
-      timeout: 10s
-      retries: 12
-      start_period: 60s
     stdin_open: true
     tty: true
 
-  # Opt-in: rebuild the robot image locally with the host user's uid/gid so
-  # files created in the mounted SETUP_PATH are owned by you (instead of
-  # uid 1000). Use this if your host user is not uid/gid 1000.
+  # Runs as root like robot; only the Clearpath user is re-numbered to your uid/gid.
   #
-  #   SETUP_PATH_HOST=/etc/clearpath docker compose up robot-local
+  #   USER_UID=$(id -u) USER_GID=$(id -g) SETUP_PATH_HOST=~/clearpath_robot docker compose up --build robot-local
+  #   ROS_DISTRO=humble ... robot-local   # user is administrator
   robot-local:
     extends:
       service: robot
@@ -265,10 +264,15 @@ services:
     container_name: cpr-robot-${ROS_DISTRO:-jazzy}-local
     build:
       context: .
-      dockerfile: cpr-robot-local.Dockerfile
+      dockerfile: docker/cpr-local-user.Dockerfile
       args:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
         CPR_BASE_IMAGE: ghcr.io/clearpathrobotics/clearpath_docker
         CPR_BASE_TAG: ${ROS_DISTRO:-jazzy}-robot-latest
         USER_UID: ${USER_UID:-1000}
         USER_GID: ${USER_GID:-1000}
+        RUNTIME_USER: root
+
+volumes:
+  gz_fuel_cache:
+  gz_fuel_cache_local:

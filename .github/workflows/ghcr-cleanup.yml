@@ -1,0 +1,50 @@
+name: GHCR cleanup
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'  # Weekly, Sunday 03:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only list what would be deleted
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  clean:
+    runs-on: ubuntu-latest
+    env:
+      # Classic PAT with packages:write; GITHUB_TOKEN can't use the tag wildcards below
+      TOKEN: ${{ secrets.GHCR_CLEANUP_TOKEN }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+    steps:
+      - name: Check token
+        if: env.TOKEN == ''
+        run: echo "::warning::GHCR_CLEANUP_TOKEN secret is not set; skipping cleanup"
+
+      - name: Delete pull request tags older than 2 weeks
+        if: env.TOKEN != ''
+        uses: snok/container-retention-policy@v3.1.0
+        with:
+          account: ${{ github.repository_owner }}
+          token: ${{ env.TOKEN }}
+          image-names: ${{ github.event.repository.name }}
+          image-tags: "*-pr-*"
+          tag-selection: tagged
+          cut-off: 2w
+          dry-run: ${{ env.DRY_RUN }}
+
+      # Children of kept multi-arch tags are protected by the action
+      - name: Delete untagged versions older than 4 weeks
+        if: env.TOKEN != ''
+        uses: snok/container-retention-policy@v3.1.0
+        with:
+          account: ${{ github.repository_owner }}
+          token: ${{ env.TOKEN }}
+          image-names: ${{ github.event.repository.name }}
+          tag-selection: untagged
+          cut-off: 4w
+          dry-run: ${{ env.DRY_RUN }}

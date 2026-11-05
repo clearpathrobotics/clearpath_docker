@@ -5,7 +5,7 @@
 #
 # Usage (layer on top of any sim-containing compose file):
 #   docker compose -f compose-sim-viz-nav2.yaml -f compose.nvidia.yaml up
-#   docker compose -f compose-sim-viz.yaml       -f compose.nvidia.yaml up
+#   docker compose -f compose.yaml -f compose.nvidia.yaml up sim viz
 
 services:
   sim:

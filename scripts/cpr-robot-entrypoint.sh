@@ -31,6 +31,8 @@ if [[ ! -f "${ROBOT_YAML}" ]]; then
 fi
 
 echo "[cpr-robot] Found robot.yaml at ${ROBOT_YAML}"
+log_env CLEARPATH_USER
+echo "[cpr-robot] The robot services take their ROS settings from robot.yaml (system.ros2), not the values above"
 log_robot_yaml "${ROBOT_YAML}"
 
 # --- Run the clearpath_robot install script ---
@@ -46,7 +48,8 @@ log_robot_yaml "${ROBOT_YAML}"
 #   clearpath-shutdown.service     (shutdown handler)
 echo "[cpr-robot] Running clearpath_robot install script..."
 set +u
-source /opt/ros/${ROS_DISTRO}/setup.bash
+# shellcheck source=/dev/null
+source "/opt/ros/${ROS_DISTRO}/setup.bash"
 set -u
 
 # Humble defaults to CycloneDDS which may not be installed; force FastDDS
@@ -64,6 +67,9 @@ if [[ -f "${SETUP_PATH}/setup.bash" ]]; then
   sed -i "s|source /opt/ros/[^/]*/setup.bash|source /opt/ros/${ROS_DISTRO}/setup.bash|" \
     "${SETUP_PATH}/setup.bash"
 fi
+
+# Files written above as root would block the services, which run as CLEARPATH_USER
+find "${SETUP_PATH}" -user root -exec chown "${CLEARPATH_USER}:" {} + 2>/dev/null || true
 
 # The clearpath_robot package ships systemd units with the correct username for
 # each distro (administrator on Humble, robot on Jazzy+), so no patching needed.
