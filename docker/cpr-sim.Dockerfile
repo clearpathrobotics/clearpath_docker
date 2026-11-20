@@ -16,14 +16,13 @@ RUN apt-get update \
 
 COPY scripts/cpr-common.sh /usr/local/bin/cpr-common.sh
 COPY scripts/cpr-dev.sh /usr/local/bin/cpr-dev.sh
-COPY scripts/cpr-healthcheck.sh /usr/local/bin/cpr-healthcheck
-COPY scripts/cpr-sim-launch.sh /usr/local/bin/cpr-sim-launch
-RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-dev.sh /usr/local/bin/cpr-healthcheck /usr/local/bin/cpr-sim-launch
+COPY scripts/cpr-sim.sh /usr/local/bin/cpr-sim
+RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-dev.sh /usr/local/bin/cpr-sim
 
 # Healthy once /clock and the robot's odometry are publishing; downstream
 # services wait on it with depends_on: condition: service_healthy.
 HEALTHCHECK --interval=10s --timeout=20s --start-period=120s --retries=24 \
-  CMD ["/usr/local/bin/cpr-healthcheck", "sim"]
+  CMD ["/usr/local/bin/cpr-sim", "healthcheck"]
 
 ENV DEBIAN_FRONTEND=
 
@@ -36,4 +35,4 @@ RUN mkdir -p /var/cache/gz/fuel && chown -R ${CPR_USER}:${CPR_USER} /var/cache/g
 USER ${CPR_USER}
 WORKDIR /home/${CPR_USER}
 
-CMD ["/usr/local/bin/cpr-sim-launch"]
+CMD ["/usr/local/bin/cpr-sim", "launch"]

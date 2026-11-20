@@ -53,8 +53,8 @@ esac
 case "${variant}" in
   sim | nav2 | viz | foxglove-bridge | robot)
     check "health check configured" bash -c \
-      "docker image inspect -f '{{json .Config.Healthcheck.Test}}' '${image}' | grep -q cpr-healthcheck"
-    check "cpr-healthcheck installed" in_image "${image}" "test -x /usr/local/bin/cpr-healthcheck"
+      "docker image inspect -f '{{json .Config.Healthcheck.Test}}' '${image}' | grep -q '\"healthcheck\"'"
+    check "cpr-${variant} installed" in_image "${image}" "test -x /usr/local/bin/cpr-${variant}"
     ;;
 esac
 

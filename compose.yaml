@@ -1,4 +1,4 @@
-# Compose file for the Clearpath dev, sim, and viz images.
+# Compose file for the Clearpath dev, sim, nav2, viz, foxglove-bridge, and robot images.
 #
 # Usage:
 #   docker compose up -d dev
@@ -6,6 +6,7 @@
 #   docker compose up sim                 # Launch simulation only
 #   docker compose up nav2                # Launch Nav2 demos only
 #   docker compose up viz                 # Launch visualization only
+#   docker compose up foxglove-bridge     # Lichtblick/Foxglove WebSocket on ws://localhost:8765
 #   docker compose up sim nav2 viz        # Launch simulation + Nav2 + visualization
 #   docker compose -f compose-sim-viz-nav2.yaml up  # Launch sim + nav2 + viz together
 #
@@ -23,7 +24,10 @@
 # For host-specific tweaks (USB devices, extra mounts, etc.), create a
 # compose.override.yaml — see compose.override.yaml.example.
 #
-# Healthchecks come from the images (scripts/cpr-healthcheck.sh).
+# Healthchecks come from the images (each image's `cpr-<service> healthcheck`).
+#
+# ROS_DOMAIN_ID, RMW_IMPLEMENTATION, ROS_AUTOMATIC_DISCOVERY_RANGE, and the middleware profile
+# come from robot.yaml's system.ros2 section, as on a robot; set them here only to override it.
 
 services:
   dev:
@@ -73,15 +77,15 @@ services:
       GAZEBO_STARTUP_TIMEOUT: ${GAZEBO_STARTUP_TIMEOUT:-120}
       GAZEBO_MAX_RESTARTS: ${GAZEBO_MAX_RESTARTS:-3}
       GAZEBO_HEADLESS: ${GAZEBO_HEADLESS:-false}
-      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
-      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
-      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-}
+      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-}
       CYCLONEDDS_URI: ${CYCLONEDDS_URI:-file:///etc/cpr/cyclonedds.xml}
     volumes:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/:rw  # rw: sim generates URDF, SRDF, configs
       - ${CYCLONEDDS_CONFIG:-./config/cyclonedds.xml}:/etc/cpr/cyclonedds.xml:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ${HOME}/.Xauthority:/tmp/.Xauthority:ro
+      - ${XAUTHORITY:-${HOME}/.Xauthority}:/tmp/.Xauthority:ro
       - gz_fuel_cache:/var/cache/gz/fuel
     stdin_open: true
     tty: true
@@ -125,18 +129,21 @@ services:
       SCAN_TOPIC: ${SCAN_TOPIC:-}
       NAV2_LAUNCH_FILE: ${NAV2_LAUNCH_FILE:-nav2.launch.py}
       NAV2_ENABLE_SLAM: ${NAV2_ENABLE_SLAM:-false}
+      NAV2_MAP: ${NAV2_MAP:-}
+      NAV2_INITIAL_POSE: ${NAV2_INITIAL_POSE:-}
       NAV2_SLAM_SYNC: ${NAV2_SLAM_SYNC:-false}
       AUTO_NAV2_STARTUP: ${AUTO_NAV2_STARTUP:-true}
-      NAV2_STARTUP_TIMEOUT_S: ${NAV2_STARTUP_TIMEOUT_S:-120}
+      NAV2_START_ATTEMPTS: ${NAV2_START_ATTEMPTS:-3}
       NAV2_SERVICE_CALL_TIMEOUT_S: ${NAV2_SERVICE_CALL_TIMEOUT_S:-8}
-      NAV2_ACTIVE_WAIT_TIMEOUT_S: ${NAV2_ACTIVE_WAIT_TIMEOUT_S:-60}
+      NAV2_ACTIVE_WAIT_TIMEOUT_S: ${NAV2_ACTIVE_WAIT_TIMEOUT_S:-300}
       NAV2_TOPIC_WAIT_TIMEOUT_S: ${NAV2_TOPIC_WAIT_TIMEOUT_S:-120}
-      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
-      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
-      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-}
+      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-}
       CYCLONEDDS_URI: ${CYCLONEDDS_URI:-file:///etc/cpr/cyclonedds.xml}
     volumes:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/:ro  # ro: nav2 only reads config
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}/maps:/etc/clearpath/maps:rw  # rw: cpr-nav2 save-map writes here
       - ${CYCLONEDDS_CONFIG:-./config/cyclonedds.xml}:/etc/cpr/cyclonedds.xml:ro
     depends_on:
       # Waits for the sim only if it's started in the same command
@@ -178,17 +185,16 @@ services:
       XAUTHORITY: /tmp/.Xauthority
       ROBOT_NAMESPACE: ${ROBOT_NAMESPACE:-}
       USE_SIM_TIME: ${USE_SIM_TIME:-true}
-      WAIT_FOR_TIMEOUT_SEC: ${WAIT_FOR_TIMEOUT_SEC:-120}
       CLEARPATH_VIZ_CONFIG: ${CLEARPATH_VIZ_CONFIG:-robot}
-      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
-      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
-      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-}
+      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-}
       CYCLONEDDS_URI: ${CYCLONEDDS_URI:-file:///etc/cpr/cyclonedds.xml}
     volumes:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/:ro  # ro: viz only reads config
       - ${CYCLONEDDS_CONFIG:-./config/cyclonedds.xml}:/etc/cpr/cyclonedds.xml:ro
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ${HOME}/.Xauthority:/tmp/.Xauthority:ro
+      - ${XAUTHORITY:-${HOME}/.Xauthority}:/tmp/.Xauthority:ro
     depends_on:
       sim:
         condition: service_healthy
@@ -215,6 +221,28 @@ services:
         condition: service_healthy
         required: false
 
+  # Headless WebSocket bridge for Lichtblick or Foxglove; no X11 or GPU needed.
+  foxglove-bridge:
+    image: ghcr.io/clearpathrobotics/clearpath_docker:${ROS_DISTRO:-jazzy}-foxglove-bridge-latest
+    container_name: cpr-foxglove-bridge-${ROS_DISTRO:-jazzy}
+    network_mode: host
+    environment:
+      SETUP_PATH: ${SETUP_PATH:-/etc/clearpath}
+      FOXGLOVE_BRIDGE_PORT: ${FOXGLOVE_BRIDGE_PORT:-8765}
+      WAIT_FOR_SIM: ${WAIT_FOR_SIM:-false}
+      WAIT_FOR_TIMEOUT_SEC: ${WAIT_FOR_TIMEOUT_SEC:-120}
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-}
+      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-}
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-}
+      CYCLONEDDS_URI: ${CYCLONEDDS_URI:-file:///etc/cpr/cyclonedds.xml}
+    volumes:
+      - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/:ro  # ro: only reads the namespace
+      - ${CYCLONEDDS_CONFIG:-./config/cyclonedds.xml}:/etc/cpr/cyclonedds.xml:ro
+    depends_on:
+      sim:
+        condition: service_healthy
+        required: false
+
   # ─── Robot (real hardware) ────────────────────────────────────────────
   # Controls the physical robot via USB, Ethernet, and CAN bus.
   # Requires: SETUP_PATH_HOST pointing to a directory containing robot.yaml.
@@ -232,11 +260,7 @@ services:
       container: docker
       SETUP_PATH: ${SETUP_PATH:-/etc/clearpath}
       ROS_DISTRO: ${ROS_DISTRO:-jazzy}
-      # For docker exec shells only; the robot services take these from robot.yaml
-      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
-      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-LOCALHOST}
-      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
-      CYCLONEDDS_URI: ${CYCLONEDDS_URI:-file:///etc/cpr/cyclonedds.xml}
+      # The robot services and the Clearpath user's shells take their ROS settings from robot.yaml
     volumes:
       - ${SETUP_PATH_HOST:-${HOME}/clearpath/}:/etc/clearpath/  # rw (default): robot may write logs/updates
       - ${CYCLONEDDS_CONFIG:-./config/cyclonedds.xml}:/etc/cpr/cyclonedds.xml:ro

@@ -14,14 +14,13 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY scripts/cpr-common.sh /usr/local/bin/cpr-common.sh
-COPY scripts/cpr-healthcheck.sh /usr/local/bin/cpr-healthcheck
-COPY scripts/cpr-viz-launch.sh /usr/local/bin/cpr-viz-launch
-RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-healthcheck /usr/local/bin/cpr-viz-launch
+COPY scripts/cpr-viz.sh /usr/local/bin/cpr-viz
+RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-viz
 
 HEALTHCHECK --interval=10s --timeout=10s --start-period=60s --retries=24 \
-  CMD ["/usr/local/bin/cpr-healthcheck", "viz"]
+  CMD ["/usr/local/bin/cpr-viz", "healthcheck"]
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 USER ${CPR_USER}
-CMD ["/usr/local/bin/cpr-viz-launch"]
+CMD ["/usr/local/bin/cpr-viz", "launch"]

@@ -65,21 +65,20 @@ RUN mkdir -p /etc/clearpath
 
 COPY scripts/cpr-common.sh /usr/local/bin/cpr-common.sh
 COPY scripts/cpr-dev.sh /usr/local/bin/cpr-dev.sh
-COPY scripts/cpr-healthcheck.sh /usr/local/bin/cpr-healthcheck
-RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-dev.sh /usr/local/bin/cpr-healthcheck
+RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-dev.sh
 
 # Install the entrypoint that validates robot.yaml and starts systemd
-COPY scripts/cpr-robot-entrypoint.sh /usr/local/bin/cpr-robot-entrypoint
-RUN chmod 0755 /usr/local/bin/cpr-robot-entrypoint
+COPY scripts/cpr-robot.sh /usr/local/bin/cpr-robot
+RUN chmod 0755 /usr/local/bin/cpr-robot
 
 # Healthy once the platform MCU status is publishing
 HEALTHCHECK --interval=10s --timeout=10s --start-period=60s --retries=12 \
-  CMD ["/usr/local/bin/cpr-healthcheck", "robot"]
+  CMD ["/usr/local/bin/cpr-robot", "healthcheck"]
 
 ENV DEBIAN_FRONTEND=
 
 VOLUME ["/sys/fs/cgroup"]
 STOPSIGNAL SIGRTMIN+3
 
-ENTRYPOINT ["/usr/local/bin/cpr-robot-entrypoint"]
+ENTRYPOINT ["/usr/local/bin/cpr-robot", "entrypoint"]
 CMD ["/sbin/init"]

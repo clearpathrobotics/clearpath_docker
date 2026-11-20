@@ -57,22 +57,27 @@ RUN useradd -m -s /bin/bash "${USERNAME}" && \
 # Setup directory for robot configuration
 RUN mkdir -p /etc/clearpath
 
+# Clearpath user's shells: ROS, the robot's setup.bash, and the dev aliases (scripts/cpr-dev.sh)
+RUN echo "if [ -f /opt/ros/${ROS_DISTRO}/setup.bash ]; then source /opt/ros/${ROS_DISTRO}/setup.bash; fi" >> /home/${USERNAME}/.bashrc \
+    && echo "source /usr/local/bin/cpr-dev.sh" >> /home/${USERNAME}/.bashrc \
+    && chown ${USERNAME}:${USERNAME} /home/${USERNAME}/.bashrc
+
 COPY scripts/cpr-common.sh /usr/local/bin/cpr-common.sh
-COPY scripts/cpr-healthcheck.sh /usr/local/bin/cpr-healthcheck
-RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-healthcheck
+COPY scripts/cpr-dev.sh /usr/local/bin/cpr-dev.sh
+RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-dev.sh
 
 # Install the entrypoint that validates robot.yaml and starts systemd
-COPY scripts/cpr-robot-entrypoint.sh /usr/local/bin/cpr-robot-entrypoint
-RUN chmod 0755 /usr/local/bin/cpr-robot-entrypoint
+COPY scripts/cpr-robot.sh /usr/local/bin/cpr-robot
+RUN chmod 0755 /usr/local/bin/cpr-robot
 
 # Healthy once the platform MCU status is publishing
 HEALTHCHECK --interval=10s --timeout=10s --start-period=60s --retries=12 \
-  CMD ["/usr/local/bin/cpr-healthcheck", "robot"]
+  CMD ["/usr/local/bin/cpr-robot", "healthcheck"]
 
 ENV DEBIAN_FRONTEND=
 
 VOLUME ["/sys/fs/cgroup"]
 STOPSIGNAL SIGRTMIN+3
 
-ENTRYPOINT ["/usr/local/bin/cpr-robot-entrypoint"]
+ENTRYPOINT ["/usr/local/bin/cpr-robot", "entrypoint"]
 CMD ["/sbin/init"]

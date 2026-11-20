@@ -1,8 +1,28 @@
 #!/usr/bin/env bash
+# cpr-viz: the viz image's command.
+#
+#   cpr-viz [launch] [launch args]   Start RViz (the image's default command)
+#   cpr-viz healthcheck              Exit 0 while RViz is running
 set -euo pipefail
 
 # shellcheck source=cpr-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/cpr-common.sh"
+
+load_ros_env
+
+usage() {
+  echo "usage: cpr-viz [launch] [launch args]" >&2
+  echo "       cpr-viz healthcheck" >&2
+}
+
+split_subcommand launch "$@"
+set -- "${subcommand_args[@]}"
+case "${subcommand}" in
+  launch) ;;
+  healthcheck) pgrep -x rviz2 >/dev/null; exit ;;
+  -h | --help | help) usage; exit 0 ;;
+  *) usage; exit 2 ;;
+esac
 
 log_env ROBOT_NAMESPACE USE_SIM_TIME CLEARPATH_VIZ_CONFIG DISPLAY
 log_robot_yaml

@@ -36,7 +36,8 @@ trap cleanup EXIT
 mkdir -p "${SETUP_PATH_HOST}"
 chmod 777 "${SETUP_PATH_HOST}"
 docker run --rm --entrypoint cat "${sim_image}" \
-  "/opt/ros/${distro}/share/clearpath_config/sample/j100_dual_laser.yaml" > "${SETUP_PATH_HOST}/robot.yaml"
+  "/opt/ros/${distro}/share/clearpath_config/sample/j100_dual_laser.yaml" |
+  sed '/^  ros2:/a\    middleware:\n      implementation: rmw_cyclonedds_cpp' > "${SETUP_PATH_HOST}/robot.yaml"
 
 cat > "${work}/override.yaml" <<EOF
 services:
