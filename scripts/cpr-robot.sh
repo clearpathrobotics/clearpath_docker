@@ -1,15 +1,38 @@
 #!/usr/bin/env bash
+# cpr-robot: the robot image's entrypoint and health check.
+#
+#   cpr-robot entrypoint <command...>   Validate robot.yaml, generate the clearpath config, enable
+#                                       the systemd services, then exec <command> (systemd, PID 1)
+#   cpr-robot healthcheck               Exit 0 once the MCU status is publishing
 set -euo pipefail
-
-# Entrypoint for the Clearpath robot container.
-# Validates that robot.yaml is present, generates the clearpath config,
-# enables the systemd services, then hands off to systemd (PID 1).
 
 SETUP_PATH="${SETUP_PATH:-/etc/clearpath/}"
 ROBOT_YAML="${SETUP_PATH}/robot.yaml"
 
 # shellcheck source=cpr-common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/cpr-common.sh"
+
+usage() {
+  echo "usage: cpr-robot entrypoint <command...>" >&2
+  echo "       cpr-robot healthcheck" >&2
+}
+
+# Uses the services' middleware, domain, and discovery settings from robot.yaml
+healthcheck() {
+  local prefix
+  source_ros
+  # shellcheck disable=SC1091
+  [[ -f "${setup_path}/setup.bash" ]] && source "${setup_path}/setup.bash"
+  prefix="$(detect_namespace)"
+  topic_publishing "${prefix:+/${prefix}}/platform/mcu/status"
+}
+
+case "${1:-}" in
+  entrypoint) shift ;;
+  healthcheck) healthcheck; exit ;;
+  -h | --help | help) usage; exit 0 ;;
+  *) usage; exit 2 ;;
+esac
 
 # Determine the system user for this distro (written into the image at build time).
 CLEARPATH_USER=$(cat /etc/clearpath_username 2>/dev/null || echo "robot")

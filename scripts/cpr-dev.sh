@@ -11,6 +11,16 @@ alias ct='colcon test'
 alias ctr='colcon test-result --verbose'
 alias cs='source install/setup.bash'
 
+# Use robot.yaml's ROS settings in shells too: in the robot image, the robot's own setup.bash, as
+# its services use; elsewhere the same settings the launch scripts load
+if [ -x /usr/local/bin/cpr-robot ] && [ -f "${SETUP_PATH:-/etc/clearpath}/setup.bash" ]; then
+    # shellcheck source=/dev/null
+    source "${SETUP_PATH:-/etc/clearpath}/setup.bash"
+elif [ -f /usr/local/bin/cpr-common.sh ]; then
+    # shellcheck source=/dev/null
+    source /usr/local/bin/cpr-common.sh && load_ros_env
+fi
+
 # Source workspace overlay if it exists
 if [ -f /colcon_ws/install/setup.bash ]; then
     # shellcheck source=/dev/null

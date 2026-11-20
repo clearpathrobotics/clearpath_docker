@@ -17,16 +17,16 @@ RUN apt-get update \
 
 
 COPY scripts/cpr-common.sh /usr/local/bin/cpr-common.sh
-COPY scripts/cpr-healthcheck.sh /usr/local/bin/cpr-healthcheck
-COPY scripts/cpr-nav2-launch.sh /usr/local/bin/cpr-nav2-launch
-RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-healthcheck /usr/local/bin/cpr-nav2-launch
+COPY scripts/cpr-nav2.sh /usr/local/bin/cpr-nav2
+RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-nav2
 
-# Healthy once bt_navigator is active and, with SLAM, a map is published.
+# Healthy once Nav2's lifecycle manager reports its nodes active and, with SLAM, a map is
+# published.
 HEALTHCHECK --interval=10s --timeout=20s --start-period=150s --retries=24 \
-  CMD ["/usr/local/bin/cpr-healthcheck", "nav2"]
+  CMD ["/usr/local/bin/cpr-nav2", "healthcheck"]
 
 ENV DEBIAN_FRONTEND=
 USER ${CPR_USER}
 WORKDIR /home/${CPR_USER}
 
-CMD ["/usr/local/bin/cpr-nav2-launch"]
+CMD ["/usr/local/bin/cpr-nav2", "launch"]

@@ -7,6 +7,86 @@
 # Strip any trailing slashes so path joins (e.g. ${setup_path}/robot.yaml) are clean.
 setup_path="${SETUP_PATH:-/etc/clearpath}"
 setup_path="${setup_path%/}"
+cpr_default_cyclonedds_uri="file:///etc/cpr/cyclonedds.xml"
+
+# split_subcommand <default> [args...]
+#
+# Sets subcommand to the first argument, or <default> when there is none or it's a launch argument
+# (name:=value), and subcommand_args to the remaining arguments.
+# shellcheck disable=SC2034  # the variables are for the caller
+split_subcommand() {
+  subcommand="$1"
+  shift
+  if [[ $# -gt 0 && "$1" != *:=* ]]; then
+    subcommand="$1"
+    shift
+  fi
+  subcommand_args=("$@")
+}
+
+# source_ros
+#
+# Sources the ROS installation, which fails under set -u.
+source_ros() {
+  local shell_opts
+  shell_opts="$(set +o)"
+  set +u
+  # shellcheck disable=SC1090
+  source "/opt/ros/${ROS_DISTRO}/setup.bash"
+  eval "${shell_opts}"
+}
+
+# load_ros_env
+#
+# Exports the ROS settings in robot.yaml's system.ros2 section, as a robot's generated setup.bash
+# does: ROS_DOMAIN_ID, RMW_IMPLEMENTATION, ROS_AUTOMATIC_DISCOVERY_RANGE, the middleware profile,
+# and discovery server settings. Values already in the environment win, except empty ones and the
+# defaults the image (its CycloneDDS profile) and the ROS setup (SUBNET discovery) export. Without
+# a profile, CycloneDDS uses the image's.
+load_ros_env() {
+  local yaml="${setup_path}/robot.yaml"
+  local env_dir var shell_opts
+  local -A keep=()
+  local -A defaults=(
+    [CYCLONEDDS_URI]="${cpr_default_cyclonedds_uri}"
+    [ROS_AUTOMATIC_DISCOVERY_RANGE]=SUBNET
+  )
+  env_dir="${TMPDIR:-/tmp}/cpr-ros-env-$(id -u)"
+
+  for var in ROS_DOMAIN_ID RMW_IMPLEMENTATION ROS_AUTOMATIC_DISCOVERY_RANGE CYCLONEDDS_URI; do
+    if [[ -z "${!var:-}" ]]; then
+      unset "${var}"
+    elif [[ "${!var}" != "${defaults[${var}]:-}" ]]; then
+      keep["${var}"]="${!var}"
+    fi
+  done
+
+  if [[ -f "${yaml}" ]]; then
+    # Generated from a copy, since the setup path is often mounted read-only
+    if [[ ! -f "${env_dir}/setup.bash" || "${yaml}" -nt "${env_dir}/setup.bash" ]]; then
+      rm -f "${env_dir}/setup.bash"
+      if ! { mkdir -p "${env_dir}" && cp "${yaml}" "${env_dir}/robot.yaml" &&
+        (source_ros && ros2 run clearpath_generator_common generate_bash -s "${env_dir}") >/dev/null 2>&1; }; then
+        echo "[cpr] couldn't read the ROS settings from ${yaml}; using the environment's" >&2
+      fi
+    fi
+    if [[ -f "${env_dir}/setup.bash" ]]; then
+      shell_opts="$(set +o)"
+      set +eu
+      # shellcheck disable=SC1091
+      source "${env_dir}/setup.bash" >/dev/null 2>&1
+      eval "${shell_opts}"
+    fi
+  fi
+
+  for var in "${!keep[@]}"; do
+    export "${var}=${keep[${var}]}"
+  done
+  if [[ -z "${CYCLONEDDS_URI:-}" && -f "${cpr_default_cyclonedds_uri#file://}" ]]; then
+    export CYCLONEDDS_URI="${cpr_default_cyclonedds_uri}"
+  fi
+  cpr_ros_env_loaded=1
+}
 
 # log_env [VAR ...]
 #
@@ -18,6 +98,10 @@ log_env() {
              CYCLONEDDS_URI SETUP_PATH "$@"; do
     echo "[cpr] ${var}=${!var-<unset, script default>}" >&2
   done
+  if [[ -n "${cpr_ros_env_loaded:-}" && "${RMW_IMPLEMENTATION:-}" != rmw_cyclonedds_cpp ]]; then
+    echo "[cpr] WARNING: these images expect CycloneDDS; set system.ros2.middleware.implementation:" \
+      "rmw_cyclonedds_cpp in robot.yaml (Fast DDS can't share memory between containers)" >&2
+  fi
 }
 
 # log_robot_yaml [yaml_file]
@@ -98,25 +182,6 @@ print(str(ns).strip('/'))
 PY
 }
 
-# wait_for_service <service_name> [timeout_s]
-#
-# Blocks until the named ROS 2 service appears or <timeout_s> seconds elapse.
-# Returns 0 when found, 1 on timeout.
-wait_for_service() {
-  local service="$1"
-  local timeout_s="${2:-30}"
-  local i
-
-  for ((i = 0; i < timeout_s; i++)); do
-    if ros2 service list --no-daemon 2>/dev/null | grep -qx "${service}"; then
-      return 0
-    fi
-    sleep 1
-  done
-
-  return 1
-}
-
 # ---------------------------------------------------------------------------
 # wait_for_sim_if_enabled [namespace]
 #
@@ -179,46 +244,4 @@ wait_for_topic_publishing() {
   done
 
   return 1
-}
-
-# get_node_state <node_fqn>
-#
-# Prints the current lifecycle state name of a ROS 2 managed node (e.g. "active").
-# Returns 0; prints nothing if the node is unreachable.
-get_node_state() {
-  local node_fqn="$1"
-  ros2 lifecycle get --no-daemon "${node_fqn}" 2>/dev/null | awk 'NR==1 {print $1}'
-}
-
-# activate_node_direct <node_fqn>
-#
-# Drives a ROS 2 managed node through configure -> activate with up to 4 retries.
-# Uses ${service_call_timeout_s} from the calling scope (default 8 s if unset).
-# Returns 0 when the node reaches active, 1 otherwise.
-activate_node_direct() {
-  local node_fqn="$1"
-  local _timeout="${service_call_timeout_s:-8}"
-  local state
-  local i
-
-  for ((i=0; i<4; i++)); do
-    state="$(get_node_state "${node_fqn}")"
-    case "${state}" in
-      active)
-        return 0
-        ;;
-      unconfigured)
-        timeout "${_timeout}" ros2 lifecycle set --no-daemon "${node_fqn}" configure >/dev/null 2>&1 || true
-        ;;
-      inactive)
-        timeout "${_timeout}" ros2 lifecycle set --no-daemon "${node_fqn}" activate >/dev/null 2>&1 || true
-        ;;
-      *)
-        ;;
-    esac
-    sleep 1
-  done
-
-  state="$(get_node_state "${node_fqn}")"
-  [[ "${state}" == "active" ]]
 }

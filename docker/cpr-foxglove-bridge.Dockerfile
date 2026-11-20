@@ -17,17 +17,19 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY scripts/cpr-common.sh /usr/local/bin/cpr-common.sh
-COPY scripts/cpr-healthcheck.sh /usr/local/bin/cpr-healthcheck
-COPY scripts/cpr-foxglove-bridge-launch.sh /usr/local/bin/cpr-foxglove-bridge-launch
-RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-healthcheck /usr/local/bin/cpr-foxglove-bridge-launch
+COPY scripts/cpr-foxglove-bridge.sh /usr/local/bin/cpr-foxglove-bridge
+RUN chmod 0755 /usr/local/bin/cpr-common.sh /usr/local/bin/cpr-foxglove-bridge
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=60s --retries=24 \
-  CMD ["/usr/local/bin/cpr-healthcheck", "foxglove-bridge"]
+  CMD ["/usr/local/bin/cpr-foxglove-bridge", "healthcheck"]
 
-# CPR_USER comes from the base image (administrator on Humble, robot otherwise)
-RUN useradd -l -m -s /bin/bash --uid 1000 "${CPR_USER}"
+# CPR_USER comes from the base image (administrator on Humble, robot otherwise).
+# Interactive shells get ROS and robot.yaml's ROS settings, like the launcher.
+RUN useradd -l -m -s /bin/bash --uid 1000 "${CPR_USER}" \
+  && echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> "/home/${CPR_USER}/.bashrc" \
+  && echo "source /usr/local/bin/cpr-common.sh && load_ros_env" >> "/home/${CPR_USER}/.bashrc"
 USER ${CPR_USER}
 
 EXPOSE 8765
 
-CMD ["/usr/local/bin/cpr-foxglove-bridge-launch"]
+CMD ["/usr/local/bin/cpr-foxglove-bridge", "launch"]
